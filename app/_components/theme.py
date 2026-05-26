@@ -346,7 +346,7 @@ h2 .info-tip-content {{ font-size: 0.78rem; }}
 .finding-callout ol {{ margin-top: 0.5rem; padding-left: 1.25rem; }}
 .finding-callout li {{ margin-bottom: 0.35rem; }}
 
-/* TWAICE-style fleet status grid — one row per system, dot+text per
+/* Operator-style fleet status grid — one row per system, dot+text per
    metric. Replaces the dense system_status_table for the demo view. */
 table.fleet-status {{
     width: 100%;

@@ -82,7 +82,7 @@ status = data.compute_system_status(window_days=30)
 soh = data.compute_soh_summary()
 
 
-# ── Fleet status grid (TWAICE-style — dot + short status per metric) ──
+# ── Fleet status grid (severity dots + short status per metric) ──
 st.markdown("## Systems")
 
 

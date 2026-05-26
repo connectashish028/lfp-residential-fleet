@@ -19,8 +19,8 @@ Voice rules (these matter — operators may read them at 2 a.m.):
 * **No hedging**: the recommendation is the recommendation. If we
   don't know, we say so and stop.
 
-Aligns with the TWAICE *Action Required / Action Recommended* product
-pattern (Ryan Franks 2024 product demo).
+Aligns with the *Action Required / Action Recommended* operator-runbook
+pattern used in commercial fleet-health dashboards.
 """
 from __future__ import annotations
 

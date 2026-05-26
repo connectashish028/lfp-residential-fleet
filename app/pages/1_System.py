@@ -301,7 +301,7 @@ else:
     )
     with tab_soc:
         # Daily spread view — operator-readable interpretation of the
-        # TWAICE container-imbalance idea for single-pack systems. The
+        # container-imbalance idea (single-pack adaptation) for single-pack systems. The
         # toggle picks the underlying signal; bars are coloured by
         # cycling-depth severity for SoC, plain for voltage.
         spread_choice = st.radio(
@@ -351,7 +351,7 @@ else:
             )
         # SoC distribution by state — where does the rack sit when
         # idle vs when working? Min/Avg/Max stat row above the chart
-        # mirrors the TWAICE "Overview of SoC Distribution" view.
+        # mirrors the the "Overview of SoC Distribution" view.
         st.markdown(
             "<p style=\"font-family:'JetBrains Mono',monospace; "
             "font-size:0.78rem; color:rgba(0,0,0,0.55); "
@@ -594,6 +594,6 @@ else:
 
 # ── ID17 Recent Finding callout hidden for now. Source still in git
 # history if needed; the diagnostic chain lives in the methodology
-# docs (PROJECT_SUMMARY.md) and the interview drill notes.
+# docs (PROJECT_SUMMARY.md) and the audit notebook.
 
 

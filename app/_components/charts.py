@@ -280,7 +280,7 @@ def daily_energy_breakdown(
 ) -> go.Figure:
     """Stacked daily energy bars — usable / cycle-loss / missing.
 
-    Adapted from the TWAICE Usable & Recoverable Energy chart. For a
+    Operator-style Usable & Recoverable Energy chart. For a
     single-pack residential rack we can't credibly decompose ``Aging``
     on a per-day basis, so aging surfaces only in the summary panel
     alongside this chart. Daily stack is honest about what the data
@@ -324,7 +324,7 @@ def daily_soc_spread(
 ) -> go.Figure:
     """Daily SoC range bars, colored by magnitude.
 
-    Severity buckets (one-pack interpretation — TWAICE's container-
+    Severity buckets (one-pack interpretation — the container-
     imbalance categories don't translate directly):
 
     * 🟢 <30 %  — light cycling
@@ -385,7 +385,7 @@ def alert_day_chart(
     """Plot one day of the channel that triggered an alert, with the
     threshold band shaded and the event window highlighted.
 
-    Pattern matches the TWAICE "Alert Analysis" panel — the operator
+    Pattern matches the the "Alert Analysis" panel pattern — the operator
     sees the signal crossing into the threshold band so the alert's
     *cause* is visible, not just its existence.
     """
@@ -520,7 +520,7 @@ def state_distribution(
     x_range: tuple[float, float] | None = None,
     n_points: int = 200,
 ) -> go.Figure:
-    """TWAICE-style distribution chart — smooth KDE curves split by
+    """Operator-style distribution chart — smooth KDE curves split by
     resting vs operating.
 
     The Y axis reads as **% of time**: KDE density per unit-x × 100,
@@ -530,7 +530,7 @@ def state_distribution(
     minute).
 
     Resting is plotted in blue (ACTUAL accent), Operating in green
-    (SEV_HEALTHY) — matches the TWAICE colour convention where the
+    (SEV_HEALTHY) — matches the colour convention used in operator dashboards where the
     state-of-charge view distinguishes the two by a continuous-
     spectrum colour pair.
     """
@@ -603,7 +603,7 @@ def state_distribution(
     # Add breathing room at the bottom so the X-axis title, tick
     # labels, and the legend strip don't collide.
     layout["margin"] = dict(l=55, r=20, t=12, b=110)
-    # Move legend below the chart — matches the TWAICE reference.
+    # Move legend below the chart — matches the operator-dashboard reference style.
     # y=-0.45 sits comfortably under the X-axis title without the
     # legend swatches landing on tick labels.
     layout["legend"] = dict(

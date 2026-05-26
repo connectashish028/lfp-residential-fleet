@@ -144,7 +144,7 @@ def finding_callout(label: str, title: str, body_html: str) -> None:
 
 
 def fleet_status_grid(rows: list[dict[str, Any]]) -> None:
-    """TWAICE-style fleet status grid — one row per system, one
+    """Operator-style fleet status grid — one row per system, one
     coloured dot + short status text per metric column.
 
     Each ``rows`` entry must carry:

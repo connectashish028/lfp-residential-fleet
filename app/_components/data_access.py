@@ -177,7 +177,7 @@ def get_daily_availability() -> pd.DataFrame:
 
 @st.cache_data(ttl=3600)
 def get_daily_soc_spread(system_id: str) -> pd.DataFrame:
-    """Daily SoC range — single-pack analogue of TWAICE's container-
+    """Daily SoC range — single-pack analogue of the container-
     level SoC-imbalance chart. Returns ``date``, ``spread`` (= max−min
     SoC % per calendar day), ``soc_max``, ``soc_min``.
 
