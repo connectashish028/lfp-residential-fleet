@@ -71,9 +71,11 @@ class TestSafeToParquetAtomicity:
         def boom(*_args, **_kwargs) -> None:
             raise OSError("simulated disk-full crash")
 
-        with patch.object(pd.DataFrame, "to_parquet", boom):
-            with pytest.raises(OSError, match="simulated disk-full"):
-                safe_to_parquet(tiny_frame, target, index=False)
+        with (
+            patch.object(pd.DataFrame, "to_parquet", boom),
+            pytest.raises(OSError, match="simulated disk-full"),
+        ):
+            safe_to_parquet(tiny_frame, target, index=False)
 
         # Target file must still contain the original baseline
         assert target.read_bytes() == baseline_bytes

@@ -29,6 +29,8 @@ Run with::
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pandas as pd
 
@@ -44,7 +46,7 @@ PACK_9KWH: frozenset[str] = frozenset({"ID19", "ID20"})
 
 # ─── RULES — audited against fleet stats ───────────────────────────────────
 # Each rule: (rule_id, severity, channel, condition_fn, min_duration_min, system_filter)
-RULES: list[tuple[str, str, str, callable, int, frozenset[str] | None]] = [
+RULES: list[tuple[str, str, str, Callable[[pd.Series], pd.Series], int, frozenset[str] | None]] = [
     # ─ Thermal ──────────────────────────────────────────────────────────
     # T_bat > 45 fires on ID19/ID20 (hotter 9 kWh group). Sub-critical.
     ("t_bat_warm",         "warning",  "temperature_c",
@@ -101,7 +103,7 @@ def collapse_to_events(
     min_duration_min: int = 1,
 ) -> pd.DataFrame:
     """Run-length collapse: consecutive flag rows → one event row."""
-    f = flag_series.fillna(False).astype(int).values
+    f = np.asarray(flag_series.fillna(False).astype(int).values)
     if f.sum() == 0:
         return pd.DataFrame(columns=["start", "end", "duration_min", "peak_value"])
     bound = np.diff(np.concatenate([[0], f, [0]]))

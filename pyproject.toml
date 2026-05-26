@@ -37,7 +37,10 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "SIM"]
-ignore = ["E501"]
+# E501 line-length — handled by ruff format if needed, not a blocker for review
+# E701 multiple-statements-on-one-line — used deliberately in charts.py for
+#      compact `if pd.isna(s): return t.TEXT_30` style helpers; readable inline
+ignore = ["E501", "E701"]
 
 [tool.mypy]
 python_version = "3.11"

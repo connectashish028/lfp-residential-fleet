@@ -69,6 +69,8 @@ recomputing, so it's safe to re-run after tweaking thresholds.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
@@ -93,7 +95,7 @@ REST_DURATION_MIN = 30    # idle this long → cell relaxed → V ≈ OCV
 DT_HOURS          = 1.0 / 60.0
 
 
-def ocv_to_soc(cell_voltage_v: np.ndarray) -> np.ndarray:
+def ocv_to_soc(cell_voltage_v: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
     """LFP-cell OCV [V] → SoC [%] via 1-D linear interpolation.
 
     Saturates flat outside the table range — values below 2.50 V map
