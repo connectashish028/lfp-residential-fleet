@@ -20,8 +20,7 @@ from datetime import datetime
 
 import pandas as pd
 import streamlit as st
-
-from _components import charts, data, kpis, theme
+from _components import data, kpis, theme
 
 st.set_page_config(
     page_title="Fleet Overview · BESS Fleet Health",

@@ -21,7 +21,6 @@ from bess_fleet.pipeline.derive_soc import (
     ocv_to_soc,
 )
 
-
 # ─── ocv_to_soc — pure lookup behaviour ─────────────────────────────
 
 
