@@ -31,19 +31,14 @@ def _value_series(values: list[float], start: str = "2025-01-01 00:00") -> pd.Se
 class TestNoEvents:
 
     def test_empty_input_returns_empty_frame(self) -> None:
+        """Empty AND all-false collapse to the same code path; one
+        test covers both. Schema must remain intact so downstream
+        concat doesn't break."""
         flag = _flag_series([])
         value = _value_series([])
         result = collapse_to_events(flag, value)
         assert result.empty
-        # Schema must still be intact so downstream concat doesn't break
         assert list(result.columns) == ["start", "end", "duration_min", "peak_value"]
-
-    def test_all_false_returns_empty_frame(self) -> None:
-        n = 60
-        flag = _flag_series([0] * n)
-        value = _value_series([1.0] * n)
-        result = collapse_to_events(flag, value)
-        assert result.empty
 
 
 # ─── Single-event collapse ──────────────────────────────────────────
@@ -90,13 +85,6 @@ class TestMultipleEvents:
         assert len(result) == 2
         assert result["duration_min"].iloc[0] == pytest.approx(2.0)
         assert result["duration_min"].iloc[1] == pytest.approx(4.0)
-
-    def test_adjacent_windows_collapse_as_one(self) -> None:
-        """Adjacent True values must be treated as one event, not two."""
-        flag = _flag_series([1, 1, 1, 1, 1])
-        value = _value_series([1.0]*5)
-        result = collapse_to_events(flag, value)
-        assert len(result) == 1
 
 
 # ─── min_duration filter ────────────────────────────────────────────

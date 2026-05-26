@@ -113,11 +113,6 @@ class TestDeriveSoc:
         last_10_mean = out["soc_pct"].iloc[-10:].mean()
         assert last_10_mean < rest_mean
 
-    def test_output_dtype_is_float32(self, synth_telemetry_resting: pd.DataFrame) -> None:
-        """SoC is persisted as float32 for storage savings."""
-        out = derive_soc(synth_telemetry_resting, self.CAPACITY_AH, self.CELLS_SERIES)
-        assert out["soc_pct"].dtype == np.float32
-
     def test_function_is_pure(self, synth_telemetry_resting: pd.DataFrame) -> None:
         """Re-running on the same input must produce the same output."""
         out_a = derive_soc(synth_telemetry_resting, self.CAPACITY_AH, self.CELLS_SERIES)

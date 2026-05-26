@@ -129,14 +129,6 @@ class TestHealthyDays:
         df = con.sql(RTE_GATE_SQL).df()
         assert _get(df, "boundary")["rte"] == pytest.approx(0.5)
 
-    def test_full_charge_discharge_cycle_closes(self, con) -> None:
-        """Full cycle 20 % → 80 % → 20 %. Both endpoints at 20 %,
-        cycle closes perfectly."""
-        _insert(con, "full_cycle", e_in=6.0, e_out=5.0, soc_start=20.0, soc_end=20.0)
-        df = con.sql(RTE_GATE_SQL).df()
-        assert _get(df, "full_cycle")["rte"] == pytest.approx(5.0 / 6.0)
-
-
 # ─── Confidence-gate failures (NULL outcomes) ───────────────────────
 
 

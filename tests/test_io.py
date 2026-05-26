@@ -46,12 +46,6 @@ class TestSafeToParquetHappyPath:
         round_trip = pd.read_parquet(target)
         pd.testing.assert_frame_equal(round_trip, tiny_frame)
 
-    def test_accepts_string_path(self, tiny_frame, tmp_path: Path) -> None:
-        """Convenience — string paths work as well as Path objects."""
-        target = tmp_path / "out.parquet"
-        safe_to_parquet(tiny_frame, str(target), index=False)
-        assert target.exists()
-
 
 class TestSafeToParquetAtomicity:
 

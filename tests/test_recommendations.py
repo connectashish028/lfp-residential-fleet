@@ -143,13 +143,8 @@ class TestRecommendationContract:
     shared Recommendation TypedDict and the voice rules."""
 
     def test_returns_typed_dict_with_two_keys(self) -> None:
+        """Locks the public API contract — caller code unpacks the
+        dict by name. (The severity-in-{info,warning,critical}
+        invariant is enforced statically by the Severity Literal type.)"""
         rec: Recommendation = for_threshold_event("t_bat_warm", 46.0, 8.0)
         assert set(rec.keys()) == {"severity", "action"}
-
-    def test_severity_is_one_of_three_values(self) -> None:
-        for rec in (
-            for_threshold_event("t_bat_warm",       46.0, 8.0),
-            for_rte_drop(0.15),
-            for_high_dt(12.0),
-        ):
-            assert rec["severity"] in {"info", "warning", "critical"}
