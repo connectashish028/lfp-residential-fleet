@@ -1,0 +1,20 @@
+# Streamlit theme configuration — Operator-Light variant.
+#
+# Sets the *base* renderer theme to light so canvas-rendered components
+# (st.dataframe / st.data_editor, which are not styleable via the CSS
+# overrides in app/_components/theme.py) inherit the right colours. Our
+# theme.py CSS layers refinements on top of this base.
+
+[theme]
+base                     = "light"
+backgroundColor          = "#f7f7f8"
+secondaryBackgroundColor = "#ffffff"
+textColor                = "#1a1a1a"
+primaryColor             = "#6B5BCC"   # lilac — derived/model accent
+font                     = "sans serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

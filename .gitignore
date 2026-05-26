@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+.ipynb_checkpoints/
+
+# Data — too large for GitHub (12 GB raw, ~700 MB derived). Reproduce
+# locally via `bootstrap_data.py`. The Figgener et al. 2024 dataset is
+# publicly available; see the bootstrap script for citation + URL.
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Build log
+build.log
