@@ -48,6 +48,7 @@ import pyarrow as pa
 import pyarrow.csv as pa_csv
 
 from bess_fleet.db import DATA_DIR
+from bess_fleet.io import safe_to_parquet
 
 # ─── helpers inlined (were previously imported from bess_fleet.build) ──────
 _MONTH_PATTERN = re.compile(r"(\d{4})_(\d{2})_System_ID_\d+\.csv$")
@@ -175,7 +176,7 @@ def main() -> None:
             continue
         sid = df["system_id"].iloc[0]
         out_path = OUT_DIR / f"{sid}.parquet"
-        df.to_parquet(out_path, index=False, compression="snappy")
+        safe_to_parquet(df, out_path, index=False, compression="snappy")
         size_mb = out_path.stat().st_size / 1e6
         interp_mean = float(df["interpolated_frac"].mean())
         print(

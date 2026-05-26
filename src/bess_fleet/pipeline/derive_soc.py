@@ -73,6 +73,7 @@ import numpy as np
 import pandas as pd
 
 from bess_fleet.db import DATA_DIR
+from bess_fleet.io import safe_to_parquet
 
 PROCESSED_DIR = DATA_DIR / "processed"
 IDENTITY_PATH = DATA_DIR / "identity.parquet"
@@ -215,7 +216,7 @@ def main() -> None:
             capacity_ah=float(cap_lookup[sid]),
             cells_series=int(cells_lookup[sid]),
         )
-        out.to_parquet(path, index=False, compression="snappy")
+        safe_to_parquet(out, path, index=False, compression="snappy")
 
         soc = out["soc_pct"]
         n_anch = int(out["is_soc_anchor"].sum())

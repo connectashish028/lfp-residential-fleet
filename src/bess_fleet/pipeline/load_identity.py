@@ -27,6 +27,7 @@ from __future__ import annotations
 import pandas as pd
 
 from bess_fleet.db import DATA_DIR
+from bess_fleet.io import safe_to_parquet
 
 META_XLSX = (
     DATA_DIR / "raw" / "figgener_meta" / "00_Data" / "00_Metadata"
@@ -76,7 +77,7 @@ def main() -> None:
     )
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    identity.to_parquet(OUT_PATH, index=False, compression="snappy")
+    safe_to_parquet(identity, OUT_PATH, index=False, compression="snappy")
     print(f"wrote {OUT_PATH}: {len(identity)} rows\n", flush=True)
     print(identity.to_string(index=False))
 

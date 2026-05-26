@@ -33,6 +33,7 @@ import numpy as np
 import pandas as pd
 
 from bess_fleet.db import DATA_DIR, connect
+from bess_fleet.io import safe_to_parquet
 
 OUT_PATH = DATA_DIR / "curated" / "threshold_events.parquet"
 
@@ -182,7 +183,7 @@ def main() -> None:
     ]]
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(OUT_PATH, index=False, compression="snappy")
+    safe_to_parquet(df, OUT_PATH, index=False, compression="snappy")
     print(f"\nwrote {OUT_PATH}: {len(df):,} events")
 
     print("\nSummary — rule × system event count:")

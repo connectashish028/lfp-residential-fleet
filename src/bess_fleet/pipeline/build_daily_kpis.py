@@ -68,6 +68,7 @@ Run with::
 from __future__ import annotations
 
 from bess_fleet.db import DATA_DIR, connect
+from bess_fleet.io import safe_to_parquet
 
 OUT_PATH = DATA_DIR / "curated" / "daily_kpis.parquet"
 
@@ -158,7 +159,7 @@ def main() -> None:
     with connect() as con:
         df = con.sql(DAILY_KPI_SQL).df()
 
-    df.to_parquet(OUT_PATH, index=False, compression="snappy")
+    safe_to_parquet(df, OUT_PATH, index=False, compression="snappy")
     print(
         f"wrote {OUT_PATH}: {len(df):,} (system × day) rows, "
         f"{OUT_PATH.stat().st_size / 1e6:.2f} MB\n",

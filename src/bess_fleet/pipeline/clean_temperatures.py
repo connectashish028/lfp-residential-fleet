@@ -24,6 +24,7 @@ import numpy as np
 import pandas as pd
 
 from bess_fleet.db import DATA_DIR
+from bess_fleet.io import safe_to_parquet
 
 RAW_DIR = DATA_DIR / "lfp_1min"
 OUT_DIR = DATA_DIR / "processed"
@@ -52,7 +53,7 @@ def main() -> None:
         df = pd.read_parquet(raw_path)
         df_clean, n_amb, n_tbat = clean_temperatures(df)
         out_path = OUT_DIR / f"{sid}.parquet"
-        df_clean.to_parquet(out_path, index=False, compression="snappy")
+        safe_to_parquet(df_clean, out_path, index=False, compression="snappy")
         size_mb = out_path.stat().st_size / 1e6
         print(
             f"  [{sid}] {len(df_clean):,} rows, {size_mb:.1f} MB · "
