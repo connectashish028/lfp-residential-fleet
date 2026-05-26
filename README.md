@@ -1,7 +1,7 @@
 # LFP residential fleet — health & analytics dashboard
 
-A TWAICE-style operator dashboard for residential battery energy
-storage, built on the [Figgener et al. 2024](https://www.nature.com/articles/s41597-024-02944-7)
+An operator dashboard for residential battery energy storage, built
+on the [Figgener et al. 2024](https://www.nature.com/articles/s41597-024-02944-7)
 open dataset of six LFP racks instrumented at one-minute cadence from
 2015 through 2022.
 
@@ -39,7 +39,7 @@ app/
     └── theme.py                 Operator-Light CSS
 
 tests/                          # 76 tests, runs in < 2 s
-docs/                           # interview-prep walkthrough + Q&A
+docs/                           # architecture diagram
 Notebooks/                      # audit notebook (SoC stress tests)
 ```
 

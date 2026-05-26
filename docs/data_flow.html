@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BESS Fleet Health — Data flow</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<style>
+  /* Operator-Light theme — matches the Streamlit dashboard */
+  :root {
+    --bg:        #f7f7f8;
+    --surface:   #ffffff;
+    --border:    #e5e5e7;
+    --text:      #1a1a1a;
+    --text-55:   rgba(0,0,0,0.55);
+    --text-70:   rgba(0,0,0,0.70);
+
+    --raw:       #ffd8a8;
+    --bronze:    #a5d8ff;
+    --silver:    #c3fae8;
+    --gold:      #b2f2bb;
+    --duckdb:    #fff3bf;
+    --datapy:    #d0bfff;
+    --app:       #eebefa;
+
+    --stroke-raw:    #f59e0b;
+    --stroke-bronze: #4a9eed;
+    --stroke-silver: #06b6d4;
+    --stroke-gold:   #22c55e;
+    --stroke-duckdb: #f59e0b;
+    --stroke-datapy: #8b5cf6;
+    --stroke-app:    #ec4899;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+              font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              font-size: 15px; line-height: 1.55; }
+
+  header { padding: 24px 32px 8px; border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  header .sub { font-family: 'JetBrains Mono', ui-monospace, monospace;
+               font-size: 12px; color: var(--text-55);
+               text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .container { display: grid; grid-template-columns: 1fr 360px;
+              gap: 28px; padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
+
+  .diagram { background: var(--surface); border: 1px solid var(--border);
+            padding: 16px; }
+
+  .diagram svg { display: block; width: 100%; height: auto; }
+
+  /* Stage boxes — hover effect */
+  .stage { cursor: pointer; transition: filter 0.15s, transform 0.15s; }
+  .stage:hover { filter: brightness(0.96); }
+  .stage.active rect { stroke-width: 3.5; }
+
+  .arrow-label { font-family: 'JetBrains Mono', ui-monospace, monospace;
+                font-size: 12px; fill: var(--text-70); }
+  .box-label   { font-family: 'JetBrains Mono', ui-monospace, monospace;
+                font-size: 14px; font-weight: 500; fill: var(--text); pointer-events: none; }
+  .box-sub     { font-family: 'JetBrains Mono', ui-monospace, monospace;
+                font-size: 11px; fill: var(--text-55); pointer-events: none; }
+
+  .contract { font-family: 'JetBrains Mono', ui-monospace, monospace;
+             font-size: 12px; fill: #15803d;
+             text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .zone-bg-pipe   { fill: var(--raw); fill-opacity: 0.10; stroke: var(--stroke-raw);
+                   stroke-width: 1; stroke-dasharray: 4 4; }
+  .zone-bg-serve  { fill: var(--datapy); fill-opacity: 0.10; stroke: var(--stroke-datapy);
+                   stroke-width: 1; stroke-dasharray: 4 4; }
+  .zone-label     { font-family: 'JetBrains Mono', ui-monospace, monospace;
+                   font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; }
+
+  /* Side detail panel */
+  aside.details { background: var(--surface); border: 1px solid var(--border);
+                 padding: 20px 22px; position: sticky; top: 24px; height: fit-content;
+                 max-height: calc(100vh - 80px); overflow-y: auto; }
+  aside.details h3 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+  aside.details .pill { display: inline-block; padding: 2px 8px; font-size: 10px;
+                       font-family: 'JetBrains Mono', monospace; text-transform: uppercase;
+                       letter-spacing: 0.08em; margin-bottom: 14px;
+                       border: 1px solid var(--border); }
+  aside.details p { font-size: 14px; color: var(--text-70); margin: 8px 0 14px; }
+  aside.details h4 { font-size: 11px; font-family: 'JetBrains Mono', monospace;
+                    text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-55);
+                    margin: 14px 0 6px; }
+  aside.details ul { margin: 0 0 8px; padding: 0; list-style: none; }
+  aside.details li { font-family: 'JetBrains Mono', monospace; font-size: 12px;
+                    color: var(--text); padding: 4px 0;
+                    border-bottom: 1px dashed var(--border); }
+  aside.details li:last-child { border-bottom: none; }
+  aside.details .note { font-size: 12.5px; color: var(--text-55); font-style: italic;
+                       border-left: 2px solid var(--border); padding-left: 10px; }
+
+  footer { padding: 16px 32px 32px; max-width: 1400px; margin: 0 auto;
+          font-size: 12px; color: var(--text-55);
+          font-family: 'JetBrains Mono', monospace; }
+
+  @media (max-width: 900px) {
+    .container { grid-template-columns: 1fr; }
+    aside.details { position: static; max-height: none; }
+  }
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>BESS Fleet Health — Data flow</h1>
+  <div class="sub">zip → System page · medallion lakehouse over DuckDB · hover any stage</div>
+</header>
+
+<div class="container">
+
+  <div class="diagram">
+    <svg viewBox="0 0 900 1080" xmlns="http://www.w3.org/2000/svg">
+
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#1a1a1a"/>
+        </marker>
+        <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a9eed"/>
+        </marker>
+        <marker id="arrow-cyan" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#06b6d4"/>
+        </marker>
+        <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#22c55e"/>
+        </marker>
+      </defs>
+
+      <!-- Pipeline zone -->
+      <rect class="zone-bg-pipe" x="180" y="40" width="540" height="510" rx="6"/>
+      <text class="zone-label" x="200" y="62" fill="#9a5030">PIPELINE — idempotent scripts write parquet</text>
+
+      <!-- RAW -->
+      <g class="stage" data-stage="raw">
+        <rect x="250" y="80" width="400" height="60" rx="3"
+              fill="#ffd8a8" stroke="#f59e0b" stroke-width="2"/>
+        <text class="box-label" x="450" y="106" text-anchor="middle">RAW · Figgener zips (1-sec CSVs)</text>
+        <text class="box-sub"   x="450" y="125" text-anchor="middle">data/raw/figgener_meta/Data_ID_*.zip</text>
+      </g>
+
+      <line x1="450" y1="140" x2="450" y2="180" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text class="arrow-label" x="465" y="166">lfp_to_1min_parquet.py · downsample 1s → 1min</text>
+
+      <!-- BRONZE -->
+      <g class="stage" data-stage="bronze">
+        <rect x="250" y="190" width="400" height="60" rx="3"
+              fill="#a5d8ff" stroke="#4a9eed" stroke-width="2"/>
+        <text class="box-label" x="450" y="216" text-anchor="middle">BRONZE · lfp_1min/*.parquet (1-min)</text>
+        <text class="box-sub"   x="450" y="235" text-anchor="middle">6 files · ~250 MB · 12 M rows</text>
+      </g>
+
+      <line x1="450" y1="250" x2="450" y2="290" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text class="arrow-label" x="465" y="276">clean_temperatures · derive_features · derive_soc</text>
+
+      <!-- SILVER -->
+      <g class="stage" data-stage="silver">
+        <rect x="250" y="300" width="400" height="60" rx="3"
+              fill="#c3fae8" stroke="#06b6d4" stroke-width="2"/>
+        <text class="box-label" x="450" y="326" text-anchor="middle">SILVER · processed/*.parquet</text>
+        <text class="box-sub"   x="450" y="345" text-anchor="middle">+ ΔT, c_rate, energy_step, SoC, is_idle</text>
+      </g>
+
+      <line x1="450" y1="360" x2="450" y2="400" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text class="arrow-label" x="465" y="386">build_daily_kpis · detect_threshold_events</text>
+
+      <!-- GOLD -->
+      <g class="stage" data-stage="gold">
+        <rect x="250" y="410" width="400" height="60" rx="3"
+              fill="#b2f2bb" stroke="#22c55e" stroke-width="2"/>
+        <text class="box-label" x="450" y="436" text-anchor="middle">GOLD · curated/{daily_kpis, events}.parquet</text>
+        <text class="box-sub"   x="450" y="455" text-anchor="middle">RTE confidence-gated · event log run-length collapsed</text>
+      </g>
+
+      <!-- Contract divider -->
+      <line x1="180" y1="510" x2="720" y2="510" stroke="#22c55e" stroke-width="1" stroke-dasharray="6 6"/>
+      <text class="contract" x="450" y="500" text-anchor="middle">parquet on disk = source of truth · DuckDB catalogue is deletable</text>
+
+      <!-- Serving zone -->
+      <rect class="zone-bg-serve" x="180" y="540" width="540" height="500" rx="6"/>
+      <text class="zone-label" x="200" y="562" fill="#5b21b6">SERVING — read-only, app layer</text>
+
+      <!-- DuckDB views -->
+      <g class="stage" data-stage="duckdb">
+        <rect x="250" y="580" width="400" height="60" rx="3"
+              fill="#fff3bf" stroke="#f59e0b" stroke-width="2"/>
+        <text class="box-label" x="450" y="606" text-anchor="middle">DuckDB views (5 views over parquet glob)</text>
+        <text class="box-sub"   x="450" y="625" text-anchor="middle">read_parquet · zero-copy · catalogue rebuilds in ~200ms</text>
+      </g>
+
+      <line x1="450" y1="640" x2="450" y2="680" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text class="arrow-label" x="465" y="666">SQL via @st.cache_data (TTL 3600 s)</text>
+
+      <!-- data.py SoT -->
+      <g class="stage" data-stage="datapy">
+        <rect x="250" y="690" width="400" height="60" rx="3"
+              fill="#d0bfff" stroke="#8b5cf6" stroke-width="2"/>
+        <text class="box-label" x="450" y="716" text-anchor="middle">data.py · single source of truth</text>
+        <text class="box-sub"   x="450" y="735" text-anchor="middle">compute_X() functions · every number traced here</text>
+      </g>
+
+      <line x1="450" y1="750" x2="450" y2="790" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text class="arrow-label" x="465" y="776">Python calls · never SQL inside pages</text>
+
+      <!-- App pages -->
+      <g class="stage" data-stage="app">
+        <rect x="250" y="800" width="400" height="60" rx="3"
+              fill="#eebefa" stroke="#ec4899" stroke-width="2"/>
+        <text class="box-label" x="450" y="826" text-anchor="middle">App pages · Fleet_Overview, 1_System</text>
+        <text class="box-sub"   x="450" y="845" text-anchor="middle">render only · no SQL · no math</text>
+      </g>
+
+      <!-- Dashed feedback arrows from each parquet layer into DuckDB -->
+      <path d="M 240 220 L 130 220 L 130 610 L 240 610"
+            fill="none" stroke="#4a9eed" stroke-width="1.2"
+            stroke-dasharray="4 3" marker-end="url(#arrow-blue)"/>
+      <path d="M 240 330 L 160 330 L 160 615 L 240 615"
+            fill="none" stroke="#06b6d4" stroke-width="1.2"
+            stroke-dasharray="4 3" marker-end="url(#arrow-cyan)"/>
+      <path d="M 240 440 L 190 440 L 190 620 L 240 620"
+            fill="none" stroke="#22c55e" stroke-width="1.2"
+            stroke-dasharray="4 3" marker-end="url(#arrow-green)"/>
+
+      <text class="arrow-label" x="55" y="410" transform="rotate(-90 55 410)" fill="#757575">
+        DuckDB reads each parquet glob
+      </text>
+
+    </svg>
+  </div>
+
+  <aside class="details" id="details">
+    <h3 id="stage-name">Hover a stage</h3>
+    <span class="pill" id="stage-tag">— · —</span>
+    <p id="stage-desc">
+      The diagram shows the full path from a raw Figgener zip to a number rendering
+      on the System page. Hover any box to see the script that produces it, the file
+      it writes, and the engineering rationale behind that hop.
+    </p>
+    <h4>Pipeline contract</h4>
+    <p class="note">
+      Every script is idempotent. Re-running any one step rebuilds its output from
+      the previous layer — never partial state. The parquets are the contract;
+      the DuckDB catalogue is expendable.
+    </p>
+    <h4>Single source of truth</h4>
+    <p class="note">
+      Streamlit pages never query DuckDB directly and never do math. They call
+      <code>data.compute_X()</code> only. That's why the ID17 DoD-vs-RTE slope
+      reads identically on the Overview callout, the System status pill, and the
+      Peer Comparison chart title.
+    </p>
+  </aside>
+
+</div>
+
+<footer>
+  Tip: open this file in any browser to demo. Inline SVG, zero dependencies.
+</footer>
+
+<script>
+  const stages = {
+    raw: {
+      name: 'RAW · Figgener zips',
+      tag: 'IMMUTABLE · 1-second CSVs',
+      desc: '12 zip files from the Figgener et al. 2024 open dataset. Each contains 1-second cadence CSVs for one residential LFP battery system, spanning 2015 to 2022. Never modified after ingestion.',
+      files: [
+        'data/raw/figgener_meta/Data_ID_*.zip',
+        'data/raw/figgener_meta/Metadata/Systems_characterization.xlsx',
+      ],
+      note: 'Source of truth at the deepest layer. If anything downstream breaks, you can always re-derive from here.',
+    },
+    bronze: {
+      name: 'BRONZE · 1-min parquet',
+      tag: 'WRITTEN BY · lfp_to_1min_parquet.py',
+      desc: 'Raw 1-second CSVs are downsampled to 1-minute cadence and persisted as parquet, one file per system. The 60× downsampling cuts storage from ~15 GB to ~250 MB while preserving the analytical signal — battery dynamics at sub-minute scale are not actionable for fleet operators.',
+      files: [
+        'src/bess_fleet/pipeline/lfp_to_1min_parquet.py',
+        'data/lfp_1min/*.parquet  (6 files)',
+      ],
+      note: 'interpolated_frac flag survives so operators can see where Figgener gap-filled.',
+    },
+    silver: {
+      name: 'SILVER · cleaned + derived',
+      tag: 'WRITTEN BY · 3 scripts',
+      desc: 'Three idempotent steps. First, sentinel scrub: Figgener uses -100 °C for missing ambient values; these become NULL. Second, derived features: thermal_delta_c, mode, is_idle, energy_step columns, c_rate. Third, OCV-corrected coulomb-counted SoC via the Plett ch. 8 hybrid: voltage anchors at rest plus current integration between anchors.',
+      files: [
+        'src/bess_fleet/pipeline/clean_temperatures.py',
+        'src/bess_fleet/pipeline/derive_features.py',
+        'src/bess_fleet/pipeline/derive_soc.py',
+        'data/processed/*.parquet  (6 files)',
+      ],
+      note: 'Cleaning is separate from feature derivation so you can re-run one without re-running the other. Each script overwrites in place; idempotent by design.',
+    },
+    gold: {
+      name: 'GOLD · analytical aggregates',
+      tag: 'WRITTEN BY · 2 scripts',
+      desc: 'Daily KPIs and a threshold-event log. The KPI script computes RTE with a three-condition confidence gate (energy_in ≥ 1 kWh, energy_out ≥ 0.5 kWh, ratio ≤ 1.05) — failing days return NULL, not garbage. The events script runs 12 rules through a run-length-encoding collapser, emitting one row per sustained violation.',
+      files: [
+        'src/bess_fleet/pipeline/build_daily_kpis.py',
+        'src/bess_fleet/pipeline/detect_threshold_events.py',
+        'data/curated/daily_kpis.parquet',
+        'data/curated/threshold_events.parquet',
+      ],
+      note: 'Between 23 and 64 percent of daily rows return NULL after the RTE confidence gate. Every survivor is trustworthy.',
+    },
+    duckdb: {
+      name: 'DuckDB views — query layer',
+      tag: 'QUERY ENGINE · not storage',
+      desc: 'Five views, each a read_parquet over a glob: telemetry_1min, telemetry_1min_clean, identity, daily_kpis, threshold_events. The catalogue file data/bess.duckdb only holds view definitions — delete it and the next connect() call rebuilds everything in ~200 ms. The parquets are the source of truth, the engine is swappable.',
+      files: [
+        'src/bess_fleet/db.py',
+        'data/bess.duckdb  (deletable catalogue)',
+      ],
+      note: 'I picked DuckDB for this scale: 250 MB, single user, sub-second analytical scans, zero infrastructure. Above 1 TB or multi-user, swap to Athena/Snowflake — same parquet, similar SQL.',
+    },
+    datapy: {
+      name: 'data.py — single source of truth',
+      tag: 'PYTHON LAYER · cached',
+      desc: 'Every numeric quantity rendered in the UI is computed in this one module. Functions like compute_dod_vs_rte_fits, get_daily_kpis, compute_soh_summary. All wrapped in @st.cache_data with a 3600 s TTL. The pages call these by name and render the result.',
+      files: [
+        'app/_components/data.py',
+        'compute_dod_vs_rte_fits()  · line 278',
+        'compute_soh()              · line 397',
+      ],
+      note: 'The ID17 slope (−0.350 pp/%DoD) appears in three UI surfaces — Overview callout, status pill annotation, Peer Comparison chart title. All three read the same function call, so the number cannot drift.',
+    },
+    app: {
+      name: 'App pages — render only',
+      tag: 'STREAMLIT · no math, no SQL',
+      desc: 'Two visible pages: Fleet_Overview.py (severity-first table + alerts timeline) and pages/1_System.py (per-rack deep dive with telemetry tabs, KDE distributions, alerts dialog). The pages do no SQL and no math — they ask data.py for numbers and Plotly for charts.',
+      files: [
+        'app/Fleet_Overview.py',
+        'app/pages/1_System.py',
+        'app/_components/charts.py',
+        'app/_components/kpis.py',
+        'app/_components/theme.py',
+      ],
+      note: 'Strict separation: numbers in data.py, visuals in charts.py, layout primitives in kpis.py, CSS in theme.py. Lets me change the look without risking the math.',
+    },
+  };
+
+  const $name = document.getElementById('stage-name');
+  const $tag  = document.getElementById('stage-tag');
+  const $desc = document.getElementById('stage-desc');
+  const $details = document.getElementById('details');
+
+  function activate(key) {
+    document.querySelectorAll('.stage').forEach(g => g.classList.remove('active'));
+    const target = document.querySelector(`.stage[data-stage="${key}"]`);
+    if (target) target.classList.add('active');
+
+    const s = stages[key];
+    if (!s) return;
+
+    const filesHtml = s.files.map(f => `<li>${f}</li>`).join('');
+
+    $details.innerHTML = `
+      <h3>${s.name}</h3>
+      <span class="pill">${s.tag}</span>
+      <p>${s.desc}</p>
+      <h4>Files</h4>
+      <ul>${filesHtml}</ul>
+      <h4>Note</h4>
+      <p class="note">${s.note}</p>
+    `;
+  }
+
+  document.querySelectorAll('.stage').forEach(g => {
+    g.addEventListener('mouseenter', () => activate(g.dataset.stage));
+    g.addEventListener('click',      () => activate(g.dataset.stage));
+  });
+</script>
+
+</body>
+</html>
