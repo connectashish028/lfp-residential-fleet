@@ -115,21 +115,19 @@ soh_latest = float(soh_row["latest_soh_pct"].iloc[0]) if not soh_row.empty else 
 kpis.heading_with_tip(
     "Usable & Recoverable Energy",
     tip=(
-        f"<b>Left chart</b> — daily energy stacked across <b>all</b> "
-        f"{window_label.lower()}:"
+        "Both views below show <b>only days that passed the four-"
+        "condition RTE gate</b> — same population as the Daily-RTE "
+        "chart further down. Gate-failed days are hidden here; they "
+        "still appear in the SoC / Voltage spread chart above so the "
+        "operator keeps diagnostic visibility on partial cycles."
+        "<br><br><b>Left chart</b> — daily energy stack:"
         "<br>· <b>Usable</b> — energy out (delivered to load)"
         "<br>· <b>Cycle loss</b> — energy in − energy out (RTE inefficiency)"
         "<br>· <b>Missing</b> — fraction of day uncovered × median daily kWh"
-        "<br><br><b>Muted bars</b> = day failed the four-condition RTE "
-        "gate (cycle didn't close, energy below the threshold, or ratio "
-        "implausible). Energy still moved on those days; the bar shows "
-        "what — but they're excluded from the donut aggregate and the "
-        "Daily-RTE median because the cycle physics isn't trustworthy."
-        "<br><br><b>Right donut</b> — aggregate over <b>only days that "
-        "passed the gate</b>, so the implied RTE (usable / (usable + "
-        "cycle loss)) matches the Daily-RTE median below. Aging is a "
-        "long-term SoH-derived estimate scaled to the same surviving-"
-        "day count."
+        "<br><br><b>Right donut</b> — aggregate of the same surviving "
+        "days. Implied RTE (usable / (usable + cycle loss)) matches the "
+        "Daily-RTE median exactly. Aging is a long-term SoH-derived "
+        "estimate scaled to the same surviving-day count."
     ),
 )
 
