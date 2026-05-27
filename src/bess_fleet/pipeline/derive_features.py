@@ -24,10 +24,10 @@ Currently derives:
 
 Run order (each script is idempotent; re-run any step to refresh):
 
-    1. python -m scripts.lfp_to_1min_parquet   # raw zip → data/lfp_1min/
-    2. python -m scripts.clean_temperatures    # data/lfp_1min/ → data/processed/
-    3. python -m scripts.load_identity         # XLSX → data/identity.parquet
-    4. python -m scripts.derive_features       # adds derived cols to data/processed/
+    1. python -m bess_fleet.pipeline.lfp_to_1min_parquet   # raw zip → data/lfp_1min/
+    2. python -m bess_fleet.pipeline.clean_temperatures    # data/lfp_1min/ → data/processed/
+    3. python -m bess_fleet.pipeline.load_identity         # XLSX → data/identity.parquet
+    4. python -m bess_fleet.pipeline.derive_features       # adds derived cols to data/processed/
 
 Step 4 modifies ``data/processed/`` in place. If you re-run step 2,
 re-run step 4 to restore derived columns.
@@ -54,7 +54,7 @@ def _load_capacity_lookup() -> dict[str, float]:
     """Return system_id → capacity_ah lookup. Required for c_rate."""
     if not IDENTITY_PATH.exists():
         raise SystemExit(
-            f"missing {IDENTITY_PATH}. Run `python -m scripts.load_identity` first."
+            f"missing {IDENTITY_PATH}. Run `python -m bess_fleet.pipeline.load_identity` first."
         )
     ident = pd.read_parquet(IDENTITY_PATH)
     return dict(zip(ident["system_id"], ident["capacity_ah"], strict=True))

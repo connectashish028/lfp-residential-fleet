@@ -19,7 +19,7 @@ Columns written:
 
 Run with::
 
-    python -m scripts.load_identity
+    python -m bess_fleet.pipeline.load_identity
 """
 
 from __future__ import annotations

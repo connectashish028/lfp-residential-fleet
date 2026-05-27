@@ -4,7 +4,7 @@ Adds ``soc_pct`` (and a ``is_soc_anchor`` boolean) to every parquet in
 ``data/processed/`` in place. Pure hybrid SoC estimation — voltage-anchored
 at relaxed-cell rest periods, current-integrated between anchors, drift
 corrected by linear interpolation. The same algorithm production BMSs
-use (Plett, *Battery Management Systems Vol 1*, ch. 3) — coulomb
+use (Plett 2015, *Battery Management Systems*, ch. 8 hybrid) — coulomb
 counting alone integrates sensor offset forever; voltage alone is
 useless in LFP's flat plateau.
 
@@ -54,13 +54,13 @@ deeply discharge or fully charge, so OCV anchors are inherently noisy.
 
 Run order
 ---------
-    1. python -m scripts.lfp_to_1min_parquet      # raw zip → 1-min parquet
-    2. python -m scripts.clean_temperatures       # sentinel scrub → processed/
-    3. python -m scripts.load_identity            # XLSX → identity.parquet
-    4. python -m scripts.derive_features          # ΔT, mode, energy, c_rate
-    5. python -m scripts.derive_soc               # ← this script
-    6. python -m scripts.build_daily_kpis         # (system × day) curated
-    7. python -m scripts.detect_threshold_events  # threshold-event audit
+    1. python -m bess_fleet.pipeline.lfp_to_1min_parquet      # raw zip → 1-min parquet
+    2. python -m bess_fleet.pipeline.clean_temperatures       # sentinel scrub → processed/
+    3. python -m bess_fleet.pipeline.load_identity            # XLSX → identity.parquet
+    4. python -m bess_fleet.pipeline.derive_features          # ΔT, mode, energy, c_rate
+    5. python -m bess_fleet.pipeline.derive_soc               # ← this script
+    6. python -m bess_fleet.pipeline.build_daily_kpis         # (system × day) curated
+    7. python -m bess_fleet.pipeline.detect_threshold_events  # threshold-event audit
 
 Idempotent — re-run any step to refresh without manual cleanup. This
 script drops any prior ``soc_pct`` / ``is_soc_anchor`` columns before
@@ -191,7 +191,7 @@ def main() -> None:
         )
     if not IDENTITY_PATH.exists():
         raise SystemExit(
-            f"missing {IDENTITY_PATH}. Run `python -m scripts.load_identity` first."
+            f"missing {IDENTITY_PATH}. Run `python -m bess_fleet.pipeline.load_identity` first."
         )
 
     ident = pd.read_parquet(IDENTITY_PATH)

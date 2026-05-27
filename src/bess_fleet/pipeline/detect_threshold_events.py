@@ -24,7 +24,7 @@ Schema:
 
 Run with::
 
-    python -m scripts.detect_threshold_events
+    python -m bess_fleet.pipeline.detect_threshold_events
 """
 
 from __future__ import annotations

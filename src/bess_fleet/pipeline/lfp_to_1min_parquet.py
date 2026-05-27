@@ -30,7 +30,7 @@ pipeline stays untouched.
 
 Run with:
 
-    python -m scripts.lfp_to_1min_parquet
+    python -m bess_fleet.pipeline.lfp_to_1min_parquet
 
 Expected run time: ~30-40 min on a laptop (CSV read + date parse dominate).
 """

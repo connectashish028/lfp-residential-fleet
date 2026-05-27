@@ -15,7 +15,7 @@ events worth flagging downstream, not faked away here.
 
 Run with::
 
-    python -m scripts.clean_temperatures
+    python -m bess_fleet.pipeline.clean_temperatures
 """
 
 from __future__ import annotations
