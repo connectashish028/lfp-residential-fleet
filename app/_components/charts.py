@@ -288,27 +288,53 @@ def daily_energy_breakdown(
     * **Usable** (green)   = ``energy_out_kwh``       (delivered)
     * **Cycle loss** (blue) = ``energy_in − energy_out`` (RTE inefficiency)
     * **Missing** (amber)  = ``(1 − coverage/100) × median daily in_kwh``
+
+    Days where the four-condition RTE gate failed (``rte IS NULL`` in
+    the daily KPI table) are rendered **muted** — same hue, ~30 %
+    opacity — so the viewer sees energy did move, but the day didn't
+    form a closed cycle and the right-side donut excludes it. Visual
+    handshake between the two views.
     """
     df = daily_kpis_for_system.sort_values("date").tail(days).copy()
     df["loss"] = (df["energy_in_kwh"] - df["energy_out_kwh"]).clip(lower=0)
     typical_daily = float(df["energy_in_kwh"].median() or 0.0)
     df["missing"] = (1.0 - df["coverage_pct"] / 100.0).clip(lower=0) * typical_daily
 
+    # Per-bar colors: full saturation on gate-passing days, ~30 %
+    # opacity on gated-out days. Same hue either way so the eye still
+    # reads the breakdown.
+    is_gated_out = df["rte"].isna().tolist()
+    usable_colors = [
+        "rgba(21,128,61,0.30)"  if g else t.SEV_HEALTHY for g in is_gated_out
+    ]
+    loss_colors = [
+        "rgba(37,99,235,0.30)"  if g else t.ACTUAL      for g in is_gated_out
+    ]
+    missing_colors = [
+        "rgba(180,83,9,0.30)"   if g else t.SEV_WARNING for g in is_gated_out
+    ]
+    # Stash the gate status in customdata so the hover string can
+    # surface it on a per-bar basis without spawning extra traces.
+    gate_status = ["partial cycle (gated out)" if g else "closed cycle" for g in is_gated_out]
+
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=df["date"], y=df["energy_out_kwh"], name="Usable",
-        marker_color=t.SEV_HEALTHY,
-        hovertemplate="%{x|%Y-%m-%d}<br>Usable %{y:.2f} kWh<extra></extra>",
+        marker_color=usable_colors,
+        customdata=gate_status,
+        hovertemplate="%{x|%Y-%m-%d}<br>Usable %{y:.2f} kWh<br>%{customdata}<extra></extra>",
     ))
     fig.add_trace(go.Bar(
         x=df["date"], y=df["loss"], name="Cycle loss",
-        marker_color=t.ACTUAL,
-        hovertemplate="%{x|%Y-%m-%d}<br>Loss %{y:.2f} kWh<extra></extra>",
+        marker_color=loss_colors,
+        customdata=gate_status,
+        hovertemplate="%{x|%Y-%m-%d}<br>Loss %{y:.2f} kWh<br>%{customdata}<extra></extra>",
     ))
     fig.add_trace(go.Bar(
         x=df["date"], y=df["missing"], name="Missing data",
-        marker_color=t.SEV_WARNING,
-        hovertemplate="%{x|%Y-%m-%d}<br>Missing %{y:.2f} kWh<extra></extra>",
+        marker_color=missing_colors,
+        customdata=gate_status,
+        hovertemplate="%{x|%Y-%m-%d}<br>Missing %{y:.2f} kWh<br>%{customdata}<extra></extra>",
     ))
     fig.update_layout(**_base_layout(height=height), barmode="stack")
     fig.update_yaxes(title_text="energy [kWh]")

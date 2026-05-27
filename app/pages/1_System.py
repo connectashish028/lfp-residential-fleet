@@ -120,11 +120,16 @@ kpis.heading_with_tip(
         "<br>· <b>Usable</b> — energy out (delivered to load)"
         "<br>· <b>Cycle loss</b> — energy in − energy out (RTE inefficiency)"
         "<br>· <b>Missing</b> — fraction of day uncovered × median daily kWh"
+        "<br><br><b>Muted bars</b> = day failed the four-condition RTE "
+        "gate (cycle didn't close, energy below the threshold, or ratio "
+        "implausible). Energy still moved on those days; the bar shows "
+        "what — but they're excluded from the donut aggregate and the "
+        "Daily-RTE median because the cycle physics isn't trustworthy."
         "<br><br><b>Right donut</b> — aggregate over <b>only days that "
-        "passed the four-condition RTE gate</b>, so the implied RTE "
-        "(usable / (usable + cycle loss)) matches the Daily-RTE median "
-        "below. Aging is a long-term SoH-derived estimate scaled to the "
-        "same surviving-day count."
+        "passed the gate</b>, so the implied RTE (usable / (usable + "
+        "cycle loss)) matches the Daily-RTE median below. Aging is a "
+        "long-term SoH-derived estimate scaled to the same surviving-"
+        "day count."
     ),
 )
 
