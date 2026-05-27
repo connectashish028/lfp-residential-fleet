@@ -115,18 +115,34 @@ soh_latest = float(soh_row["latest_soh_pct"].iloc[0]) if not soh_row.empty else 
 kpis.heading_with_tip(
     "Usable & Recoverable Energy",
     tip=(
-        f"<b>Daily energy breakdown</b> over the {window_label.lower()}, stacked:"
+        f"<b>Left chart</b> — daily energy stacked across <b>all</b> "
+        f"{window_label.lower()}:"
         "<br>· <b>Usable</b> — energy out (delivered to load)"
         "<br>· <b>Cycle loss</b> — energy in − energy out (RTE inefficiency)"
         "<br>· <b>Missing</b> — fraction of day uncovered × median daily kWh"
-        "<br><br>Aging surfaces in the summary card to the right rather "
-        "than a per-day bar — it's a long-term effect, not a daily one."
+        "<br><br><b>Right donut</b> — aggregate over <b>only days that "
+        "passed the four-condition RTE gate</b>, so the implied RTE "
+        "(usable / (usable + cycle loss)) matches the Daily-RTE median "
+        "below. Aging is a long-term SoH-derived estimate scaled to the "
+        "same surviving-day count."
     ),
 )
 
-# Build the breakdown frame, then compute aggregate stats for the right card
+# Build the breakdown frame for the donut. The left-side bar chart
+# still shows every day for diagnostic visibility, but the donut's
+# aggregate totals are computed over **only the days that passed the
+# four-condition RTE gate** (rte IS NOT NULL). That keeps the
+# donut's implied RTE (usable / (usable + cycle loss)) consistent
+# with the Daily-RTE median surfaced below. Without this filter,
+# partial-cycle days inflate the cycle-loss slice and the two
+# numbers drift apart.
 nameplate_kwh = float(ident_row["capacity_kwh"])
-energy_window = sys_kpis.sort_values("date").tail(window_days).copy()
+energy_window_all = sys_kpis.sort_values("date").tail(window_days).copy()
+energy_window     = energy_window_all[energy_window_all["rte"].notna()].copy()
+
+n_surviving = len(energy_window)
+n_total     = len(energy_window_all)
+
 energy_window["loss"] = (
     energy_window["energy_in_kwh"] - energy_window["energy_out_kwh"]
 ).clip(lower=0)
@@ -140,7 +156,11 @@ total_loss    = float(energy_window["loss"].sum())
 total_missing = float(energy_window["missing"].sum())
 total_dc      = total_usable + total_loss + total_missing
 aging_pct = max(0.0, 100.0 - (soh_latest if pd.notna(soh_latest) else 100.0))
-aging_kwh = aging_pct / 100.0 * nameplate_kwh * window_days  # window-equivalent
+# Aging scales with surviving days so the donut's denominator is
+# coherent — same population across all four slices.
+aging_kwh = aging_pct / 100.0 * nameplate_kwh * max(n_surviving, 1)
+
+donut_period_label = f"{n_surviving} of {n_total} days"
 
 chart_col, donut_col = st.columns([1.7, 1.3])
 with chart_col:
@@ -156,7 +176,7 @@ with donut_col:
             missing_kwh=total_missing,
             aging_kwh=aging_kwh,
             height=320,
-            period_label=window_short,
+            period_label=donut_period_label,
         ),
         width="stretch", config=charts.PLOTLY_CONFIG,
     )
