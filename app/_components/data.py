@@ -6,8 +6,8 @@ analytical helpers; it has been split into two for clarity:
 * :mod:`._components.data_access` — cached ``get_*`` queries that
   return DataFrames straight from the DuckDB views.
 * :mod:`._components.analytics`   — cached ``compute_*`` functions
-  that derive analytical values (status pills, SoH) by composing
-  the queries above.
+  that derive analytical values (status pills, availability) by
+  composing the queries above.
 
 Pages still import via ``from _components import data`` and call
 ``data.get_X()`` or ``data.compute_X()`` — that contract is preserved
@@ -21,8 +21,6 @@ from __future__ import annotations
 
 from .analytics import (
     compute_availability,
-    compute_soh,
-    compute_soh_summary,
     compute_system_status,
 )
 from .data_access import (
@@ -51,6 +49,5 @@ __all__ = [
     "get_daily_soc_spread", "get_daily_voltage_spread",
     # analytics
     "compute_system_status",
-    "compute_soh", "compute_soh_summary",
     "compute_availability",
 ]

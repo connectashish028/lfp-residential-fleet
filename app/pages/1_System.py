@@ -103,14 +103,6 @@ recent_window = sys_kpis[sys_kpis["date"] > _cutoff_recent]
 rte_recent = recent_window["rte"].median()
 daily_efc_recent = recent_window["efc"].median()
 
-# SoH still computed because the donut + aging-line use it; KPI tile
-# strip has been removed, so these numbers surface inline next to the
-# relevant chart headings (or in the donut centre) instead.
-soh_summary = data.compute_soh_summary()
-soh_row = soh_summary[soh_summary["system_id"] == sid]
-soh_latest = float(soh_row["latest_soh_pct"].iloc[0]) if not soh_row.empty else float("nan")
-
-
 # ── Usable & Recoverable Energy — window-scoped breakdown ────────────
 kpis.heading_with_tip(
     "Usable & Recoverable Energy",
@@ -126,8 +118,7 @@ kpis.heading_with_tip(
         "<br>· <b>Missing</b> — fraction of day uncovered × median daily kWh"
         "<br><br><b>Right donut</b> — aggregate of the same surviving "
         "days. Implied RTE (usable / (usable + cycle loss)) matches the "
-        "Daily-RTE median exactly. Aging is a long-term SoH-derived "
-        "estimate scaled to the same surviving-day count."
+        "Daily-RTE median exactly."
     ),
 )
 
@@ -158,10 +149,6 @@ total_usable  = float(energy_window["energy_out_kwh"].sum())
 total_loss    = float(energy_window["loss"].sum())
 total_missing = float(energy_window["missing"].sum())
 total_dc      = total_usable + total_loss + total_missing
-aging_pct = max(0.0, 100.0 - (soh_latest if pd.notna(soh_latest) else 100.0))
-# Aging scales with surviving days so the donut's denominator is
-# coherent — same population across all four slices.
-aging_kwh = aging_pct / 100.0 * nameplate_kwh * max(n_surviving, 1)
 
 donut_period_label = f"{n_surviving} of {n_total} days"
 
@@ -177,7 +164,6 @@ with donut_col:
             usable_kwh=total_usable,
             loss_kwh=total_loss,
             missing_kwh=total_missing,
-            aging_kwh=aging_kwh,
             height=320,
             period_label=donut_period_label,
         ),
@@ -259,11 +245,6 @@ st.plotly_chart(
     charts.daily_cycling_chart(sys_kpis, height=240, days=window_days),
     width="stretch", config=charts.PLOTLY_CONFIG,
 )
-
-
-# ── SoH plot removed from the demo view (KPI tile still surfaces the
-# headline %). The monthly-trend chart source is recoverable from git
-# history if it needs to be re-introduced as a feature.
 
 
 # ── Telemetry tabs ────────────────────────────────────────────────────

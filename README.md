@@ -45,14 +45,13 @@ tests/                          # test suite
 
 ## Headline KPIs
 
-All four are computed in [`build_daily_kpis.py`](src/bess_fleet/pipeline/build_daily_kpis.py)
+All three are computed in [`build_daily_kpis.py`](src/bess_fleet/pipeline/build_daily_kpis.py)
 or in the analytics layer:
 
 | KPI | Definition | Notes |
 |---|---|---|
 | **Daily RTE** | `Σ energy_out / Σ energy_in` per day | Four-condition gate — see below |
 | **Daily cycling (EFC/day)** | `throughput / (2 × nameplate)` | Capacity-relative throughout |
-| **State of Health** | OCV-anchored coulomb counting, monthly median, normalised to first-six-month baseline | Plett 2015 ch. 8 hybrid; clipped to [70, 100] |
 | **Availability** | `n_samples × (1 − interp_frac) / 1440`, capped 100 % | DST-cap + interpolation-discount |
 
 ### The RTE confidence gate

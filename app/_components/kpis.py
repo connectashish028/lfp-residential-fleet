@@ -155,7 +155,7 @@ def fleet_status_grid(rows: list[dict[str, Any]]) -> None:
     * For each status column, two keys ``<col>_color`` (one of
       ``green`` / ``yellow`` / ``red`` / ``grey``) and ``<col>_text``
       (display string). Required columns: ``perf``, ``safety``,
-      ``soh``, ``status``.
+      ``status``.
 
     The visual idiom is intentionally borrowed from operator-grade
     fleet dashboards: the eye scans down a column for the colour
@@ -167,7 +167,6 @@ def fleet_status_grid(rows: list[dict[str, Any]]) -> None:
         "<th>System</th>"
         "<th>Performance Status</th>"
         "<th>Safety Index</th>"
-        "<th>State of Health</th>"
         "<th>Status</th>"
         "</tr></thead>"
     )
@@ -198,89 +197,10 @@ def fleet_status_grid(rows: list[dict[str, Any]]) -> None:
             "</td>"
             + _cell(r["perf_color"],   r["perf_text"])
             + _cell(r["safety_color"], r["safety_text"])
-            + _cell(r["soh_color"],    r["soh_text"])
             + _cell(r["status_color"], r["status_text"])
             + "</tr>"
         )
     st.markdown(
         f'<table class="fleet-status">{head}<tbody>{"".join(body_rows)}</tbody></table>',
-        unsafe_allow_html=True,
-    )
-
-
-def system_status_table(rows: list[dict[str, Any]]) -> None:
-    """Render the per-system status table on the Overview page.
-
-    Retirement-aware: rows with ``is_active=False`` show the
-    last-seen month in the events column instead of the open-events
-    pills, and the status pill renders as ``RETIRED``.
-
-    Expected per-row keys: ``system_id``, ``capacity``,
-    ``is_active``, ``last_seen``, ``rte_pct``, ``mean_dt_c``,
-    ``soh_pct``, ``warning_events``, ``critical_events``,
-    ``status``, ``notable`` (optional).
-    """
-    head = (
-        "<thead><tr>"
-        "<th>System</th>"
-        "<th>Capacity</th>"
-        "<th>30-day RTE</th>"
-        "<th>30-day ΔT</th>"
-        "<th>SoH</th>"
-        "<th>Events / last seen</th>"
-        "<th>Status</th>"
-        "</tr></thead>"
-    )
-
-    def _fmt(value: Any, suffix: str = "") -> str:
-        if value is None or (isinstance(value, float) and value != value):
-            return '<span style="color:rgba(0,0,0,0.30)">—</span>'
-        if isinstance(value, float):
-            return f"{value:.1f}{suffix}"
-        return f"{value}{suffix}"
-
-    body_rows: list[str] = []
-    for r in rows:
-        sid = r["system_id"]
-        is_active = bool(r.get("is_active", True))
-
-        # Events / last-seen cell — meaning depends on active vs retired
-        if not is_active:
-            mid_html = (
-                f'<span style="color:rgba(0,0,0,0.55)">'
-                f"last seen {r.get('last_seen', '—')}</span>"
-            )
-        else:
-            ev_html: list[str] = []
-            if r.get("critical_events"):
-                ev_html.append(pill("critical", f"{r['critical_events']} crit"))
-            if r.get("warning_events"):
-                ev_html.append(pill("watch", f"{r['warning_events']} warn"))
-            if not ev_html:
-                ev_html.append('<span style="color:rgba(0,0,0,0.30)">—</span>')
-            mid_html = " &nbsp; ".join(ev_html)
-
-        # Status pill — extra annotation if a notable finding is attached
-        status_html = pill(r["status"])
-        if r.get("notable"):
-            status_html += (
-                f'<br><span style="font-family:Inter; font-size:0.7rem;'
-                f'color:rgba(0,0,0,0.55); text-transform:none; letter-spacing:normal;">'
-                f"⚐ {r['notable'][:42]}…</span>"
-            )
-
-        body_rows.append(
-            "<tr>"
-            f"<td><strong>{sid}</strong></td>"
-            f"<td>{r['capacity']}</td>"
-            f"<td>{_fmt(r.get('rte_pct'), '%')}</td>"
-            f"<td>{_fmt(r.get('mean_dt_c'), ' °C')}</td>"
-            f"<td>{_fmt(r.get('soh_pct'), '%')}</td>"
-            f"<td>{mid_html}</td>"
-            f"<td>{status_html}</td>"
-            "</tr>"
-        )
-    st.markdown(
-        f'<table class="system-status">{head}<tbody>{"".join(body_rows)}</tbody></table>',
         unsafe_allow_html=True,
     )

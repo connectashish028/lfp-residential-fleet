@@ -204,24 +204,22 @@ def energy_breakdown_pie(
     usable_kwh: float,
     loss_kwh: float,
     missing_kwh: float,
-    aging_kwh: float,
     height: int = 280,
     period_label: str = "60 d",
 ) -> go.Figure:
     """Donut chart matching the daily stacked-bar categories.
 
-    Same four buckets, same colors. The hole carries the aggregate
+    Same three buckets, same colors. The hole carries the aggregate
     energy figure for the period; legend on the right surfaces the
     absolute kWh per bucket so the reader doesn't have to hover.
     """
-    labels = ["Usable", "Cycle loss", "Missing data", "Aging (est.)"]
+    labels = ["Usable", "Cycle loss", "Missing data"]
     values = [
         max(0.0, float(usable_kwh)),
         max(0.0, float(loss_kwh)),
         max(0.0, float(missing_kwh)),
-        max(0.0, float(aging_kwh)),
     ]
-    colors = [t.SEV_HEALTHY, t.ACTUAL, t.SEV_WARNING, t.TEXT_30]
+    colors = [t.SEV_HEALTHY, t.ACTUAL, t.SEV_WARNING]
     total = sum(values)
 
     # Legend label rendered with the absolute kWh and the percent so
@@ -279,11 +277,8 @@ def daily_energy_breakdown(
 ) -> go.Figure:
     """Stacked daily energy bars — usable / cycle-loss / missing.
 
-    Operator-style Usable & Recoverable Energy chart. For a
-    single-pack residential rack we can't credibly decompose ``Aging``
-    on a per-day basis, so aging surfaces only in the summary panel
-    alongside this chart. Daily stack is honest about what the data
-    actually carries:
+    Operator-style Usable & Recoverable Energy chart. Daily stack is
+    honest about what the data actually carries:
 
     * **Usable** (green)   = ``energy_out_kwh``       (delivered)
     * **Cycle loss** (blue) = ``energy_in − energy_out`` (RTE inefficiency)

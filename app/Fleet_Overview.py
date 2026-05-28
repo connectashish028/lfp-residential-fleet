@@ -4,12 +4,9 @@ Severity-first layout:
 
 1. Historical-replay banner — frames the dataset window so the page
    doesn't pretend to be live.
-2. Stat strip — Attention needed, Median RTE, **Median SoH** (replaces
-   the noisy Mean ΔT tile from v0), Active systems.
-3. "Recent finding" callout — the ID17 internal-resistance story.
-4. System status table — six rows, retirement-aware. Retired systems
-   show their last-seen date instead of "—" for every column.
-5. Event timeline — last 90 days, severity-coloured.
+2. System status grid — one row per rack, retirement-aware. Performance,
+   safety, and overall status pills per row; the eye scans columns for
+   the worst dot.
 
 Every numeric quantity referenced here comes from
 :mod:`app._components.data` — single source of truth.
@@ -78,7 +75,6 @@ st.markdown(
 # and the ID17 diagnostic chain now lives at the bottom of the
 # System → ID17 page.)
 status = data.compute_system_status(window_days=30)
-soh = data.compute_soh_summary()
 
 
 # ── Fleet status grid (severity dots + short status per metric) ──
@@ -105,18 +101,6 @@ def _color_safety(critical: int, warning: int, notable: object) -> tuple[str, st
     return "green", "Stable"
 
 
-def _color_soh(soh_pct: float) -> tuple[str, str]:
-    """Map normalised SoH % to (color, text). SoH is baseline-anchored
-    so the thresholds are tight: a 5pp drop = yellow, 10pp drop = red."""
-    if soh_pct is None or pd.isna(soh_pct):
-        return "grey", "Insufficient data"
-    if soh_pct >= 95:
-        return "green", f"{soh_pct:.1f}%"
-    if soh_pct >= 90:
-        return "yellow", f"{soh_pct:.1f}%"
-    return "red", f"{soh_pct:.1f}%"
-
-
 _STATUS_LOOKUP = {
     "healthy":  ("green",  "Healthy"),
     "watch":    ("yellow", "Watch"),
@@ -126,19 +110,15 @@ _STATUS_LOOKUP = {
 
 
 cap_lookup = dict(zip(identity["system_id"], identity["capacity_kwh"], strict=True))
-soh_lookup = {r["system_id"]: r for _, r in soh.iterrows()}
 
 grid_rows: list[dict] = []
 for _, r in status.iterrows():
     sid = r["system_id"]
-    soh_row = soh_lookup.get(sid, {})
-    soh_pct = soh_row.get("latest_soh_pct") if isinstance(soh_row, dict) else soh_row["latest_soh_pct"]
 
     perf_color, perf_text = _color_rte(r["rte_pct"])
     safety_color, safety_text = _color_safety(
         int(r["critical_events"]), int(r["warning_events"]), r.get("notable_finding"),
     )
-    soh_color, soh_text = _color_soh(soh_pct)
     status_color, status_text = _STATUS_LOOKUP.get(r["status"], ("grey", "Unknown"))
 
     grid_rows.append({
@@ -147,7 +127,6 @@ for _, r in status.iterrows():
         "capacity":     f"{cap_lookup.get(sid, 0):.2f} kWh",
         "perf_color":   perf_color,   "perf_text":   perf_text,
         "safety_color": safety_color, "safety_text": safety_text,
-        "soh_color":    soh_color,    "soh_text":    soh_text,
         "status_color": status_color, "status_text": status_text,
     })
 

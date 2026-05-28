@@ -8,8 +8,8 @@ This module is the *only* place the dashboard talks to DuckDB. Pages
 and analytics modules must not import ``bess_fleet.db`` directly —
 go through here so the cache layer can do its job.
 
-For analytical functions that derive values from these queries (SoH,
-status pills, slopes), see :mod:`._components.analytics`.
+For analytical functions that derive values from these queries
+(status pills, availability), see :mod:`._components.analytics`.
 """
 from __future__ import annotations
 
