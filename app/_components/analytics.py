@@ -11,6 +11,7 @@ the recomputation cost twice.
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -20,7 +21,6 @@ from .data_access import (
     get_active_status,
     get_daily_availability,
     get_daily_kpis,
-    get_identity,
     get_threshold_events,
 )
 
