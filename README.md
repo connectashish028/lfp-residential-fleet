@@ -38,9 +38,7 @@ app/
     ├── alerts.py                alert-detail UI helpers
     └── theme.py                 Operator-Light CSS
 
-tests/                          # 76 tests, runs in < 2 s
-docs/                           # architecture diagram
-Notebooks/                      # audit notebook (SoC stress tests)
+tests/                          # test suite
 ```
 
 ---
@@ -89,7 +87,7 @@ pip install -e .[dev]
 python bootstrap_data.py
 
 # 4. tests
-pytest tests/                # 76 tests in < 2 s
+pytest tests/
 
 # 5. dashboard
 streamlit run app/Fleet_Overview.py
@@ -116,18 +114,6 @@ pipeline order.
   expressed as a fraction of nameplate (RTE confidence gates, EFC,
   C-rate), it is. The same code is correct on a 5 kWh residential
   rack and a 1 MWh utility system.
-
----
-
-## Methodology
-
-For the per-KPI rationale, the data-quality caveats per system
-(ID19/ID20 plateau effect, ID18 short tenure), and the headline
-ID17 finding (elevated internal resistance via the DoD-vs-RTE slope),
-see [`PROJECT_SUMMARY.md`](PROJECT_SUMMARY.md).
-
-For the eight SoC-algorithm stress tests and the slope-fit numbers,
-see [`Notebooks/daily_kpis_eda.ipynb`](Notebooks/daily_kpis_eda.ipynb).
 
 ---
 

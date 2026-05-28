@@ -36,13 +36,9 @@ RETIREMENT_GAP_DAYS: int = 60
 
 # Hand-curated overrides — racks whose status pill should escalate to
 # at least "watch" because an engineer has investigated and flagged a
-# root cause. The ID17 slope value below was computed once in the audit
-# notebook (notebooks/daily_kpis_eda.ipynb § DoD-vs-RTE fits); the live
-# computation function has been removed for this demo scope. To recover
-# it, restore ``compute_dod_vs_rte_fits`` from git history.
-NOTABLE_FINDINGS: dict[str, str] = {
-    "ID17": "elevated internal resistance (DoD-vs-RTE slope −0.35 pp/%)",
-}
+# root cause. Empty by default; add entries here when a curated finding
+# should override the event-count-based pill.
+NOTABLE_FINDINGS: dict[str, str] = {}
 
 
 # ─── Reference tables ──────────────────────────────────────────────────

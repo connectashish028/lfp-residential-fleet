@@ -613,8 +613,6 @@ else:
                     _show_alert(_idx)
 
 
-# ── ID17 Recent Finding callout hidden for now. Source still in git
-# history if needed; the diagnostic chain lives in the methodology
-# docs (PROJECT_SUMMARY.md) and the audit notebook.
+# ── ID17 Recent Finding callout hidden for now. Source in git history.
 
 

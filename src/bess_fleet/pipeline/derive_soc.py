@@ -29,9 +29,9 @@ Derived columns (float32 / bool, both nullable)
 * ``is_soc_anchor``  — ``True`` at OCV-anchor timestamps (useful for
                        overlaying anchor markers in dashboard charts)
 
-Algorithm caveat — audited in ``notebooks/daily_kpis_eda.ipynb`` § 8
-------------------------------------------------------------------
-Eight stress tests confirm the implementation is mathematically sound:
+Algorithm caveat
+----------------
+Stress testing confirms the implementation is mathematically sound:
 
 * Anchor self-consistency RMSE = 0.0000 (by construction)
 * Dispatch monotonicity ≥ 98.6 % across all systems
