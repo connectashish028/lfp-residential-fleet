@@ -114,9 +114,9 @@ def _read_csv_member(zf: zipfile.ZipFile, name: str) -> pd.DataFrame:
     """Read one monthly CSV including the Interpolated provenance flag."""
     with zf.open(name) as fh:
         buf = fh.read()
-    table = pa_csv.read_csv(
+    table = pa_csv.read_csv(  # type: ignore[attr-defined]
         _io.BytesIO(buf),
-        convert_options=pa_csv.ConvertOptions(
+        convert_options=pa_csv.ConvertOptions(  # type: ignore[attr-defined]
             column_types={
                 c: t for c, t in zip(_PA_TYPES.names, _PA_TYPES.types, strict=True)
             },
