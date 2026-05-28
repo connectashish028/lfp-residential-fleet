@@ -1,7 +1,7 @@
 # LFP residential fleet — health & analytics dashboard
 
 An operator dashboard for residential battery energy storage, built
-on the [Figgener et al. 2024](https://www.nature.com/articles/s41597-024-02944-7)
+on the [Figgener et al. 2024](https://www.nature.com/articles/s41560-024-01620-9)
 open dataset of six LFP racks instrumented at one-minute cadence from
 2015 through 2022.
 
@@ -119,9 +119,9 @@ pipeline order.
 
 ## Data
 
-[Figgener, J. et al. (2024)](https://doi.org/10.1038/s41597-024-02944-7).
+[Figgener, J. et al. (2024)](https://doi.org/10.1038/s41560-024-01620-9).
 Multi-year field measurements of home storage systems and their use
-in capacity estimation. *Scientific Data*, open dataset.
+in capacity estimation. *Nature Energy*, open dataset.
 
 Six LFP residential systems, ~12 M rows of 1-minute telemetry across
 2015–2022, single manufacturer.
