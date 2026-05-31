@@ -36,7 +36,7 @@ class Recommendation(TypedDict):
 
 # ─── Threshold-event rule book ─────────────────────────────────────────
 # Mirrors the rule_id strings emitted by
-# ``scripts/detect_threshold_events.py``. Each entry is
+# :mod:`bess_fleet.pipeline.detect_threshold_events`. Each entry is
 # ``(severity, action_template)``; the template accepts the
 # ``{peak}`` and ``{duration}`` placeholders filled by
 # :func:`for_threshold_event` below.

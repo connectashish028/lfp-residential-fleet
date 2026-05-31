@@ -138,6 +138,15 @@ for _, r in status.iterrows():
 
 kpis.fleet_status_grid(grid_rows)
 
+# Caveat: non-LFP systems use a literature-approximate OCV→SoC curve, so
+# their RTE-gated Performance Status is indicative, not cell-calibrated.
+if set(_shown["chemistry"]) - {"LFP"}:
+    st.caption(
+        "⚠️ NMC / LMO systems use a literature-approximate OCV→SoC curve, so "
+        "their Performance Status (RTE-gated) is indicative. Open a system for "
+        "detail, or see the Degradation page for the chemistry-robust read."
+    )
+
 
 # Tiny footer
 st.markdown("---")

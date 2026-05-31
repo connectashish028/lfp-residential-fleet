@@ -54,7 +54,7 @@ deeply discharge or fully charge, so OCV anchors are inherently noisy.
 
 Run order
 ---------
-    1. python -m bess_fleet.pipeline.lfp_to_1min_parquet      # raw zip → 1-min parquet
+    1. python -m bess_fleet.pipeline.raw_to_1min_parquet      # raw zip → 1-min parquet
     2. python -m bess_fleet.pipeline.clean_temperatures       # sentinel scrub → processed/
     3. python -m bess_fleet.pipeline.load_identity            # XLSX → identity.parquet
     4. python -m bess_fleet.pipeline.derive_features          # ΔT, mode, energy, c_rate

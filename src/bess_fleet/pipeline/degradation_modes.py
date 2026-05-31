@@ -49,8 +49,12 @@ Method
    are *operational* degradation indicators — which mechanism dominates
    and when it accelerated — not teardown-grade numbers.
 
-Output: ``data/curated/degradation_modes.parquet`` — one row per
-(system, month) with the signature features and the per-month mode split.
+Outputs
+-------
+* ``data/curated/degradation_modes.parquet`` — one row per (system, month)
+  with the signature features and the per-month mode split.
+* ``data/curated/degradation_summary.parquet`` — one row per system with
+  the verdict (observability, fade, leaning) the dashboard reads directly.
 
 Run with::
 
@@ -69,9 +73,14 @@ from scipy.signal import find_peaks, savgol_filter
 from bess_fleet.db import DATA_DIR
 from bess_fleet.io import safe_to_parquet
 
-BRONZE_DIR = DATA_DIR / "lfp_1min"
+# Read the *silver* layer (cleaned, sentinels nulled), not bronze — the
+# ICA core only needs V/I (identical in both), but temp_med should come
+# from scrubbed temperatures, and reading silver keeps this gold stage
+# consistent with the rest of the pipeline.
+SILVER_DIR = DATA_DIR / "processed"
 IDENTITY_PATH = DATA_DIR / "identity.parquet"
 OUT_PATH = DATA_DIR / "curated" / "degradation_modes.parquet"
+SUMMARY_OUT_PATH = DATA_DIR / "curated" / "degradation_summary.parquet"
 
 # ─── Sweep-extraction parameters ───────────────────────────────────────────
 SWEEP_MIN_CRATE = 0.01    # below this the cell is essentially idle
@@ -104,6 +113,16 @@ PEAK_V_SHIFT_REF = 0.020      # peak drift beyond this (V) reads as LAM
 # A degradation mode is only published when capacity is actually observable
 # from field sweeps. These gates are the headline cross-chemistry result:
 # NMC/LMO clear them, the flat-plateau LFP systems do not.
+#
+# Threshold rationale (engineering judgement, not fitted — declared so a
+# reviewer can challenge it): expected capacity fade is ~2–3 %/yr, so a
+# month-to-month CoV above ~15 % means the measurement noise swamps a full
+# year of real signal — useless for trending. An R² below ~0.30 on the
+# smoothed series means the linear fade fit explains less than a third of
+# the variance, i.e. there is no trend to speak of. Both are deliberately
+# lenient: they admit only systems where the fade is unambiguous, and the
+# observed split is bimodal (NMC-family ≈0.01–0.02 CoV / R²≈0.9 vs LFP
+# ≈0.2–0.4 / R²≤0.5), so the verdict is insensitive to the exact cutoffs.
 CAP_COV_MAX  = 0.15           # above this, the capacity proxy is too noisy
 FADE_R2_MIN  = 0.30           # below this, there is no real fade trend
 
@@ -406,8 +425,10 @@ def system_summary(sid: str, chemistry: str, modes: pd.DataFrame) -> dict[str, o
         dominant = "low-confidence"
     else:
         lli, lam = float(valid["lli_frac"].mean()), float(valid["lam_frac"].mean())
-        tag = "LLI" if lli >= lam else "LAM"
-        dominant = f"{tag} ({max(lli, lam) * 100:.0f}%)"
+        # A transparent heuristic, not a teardown — report the leaning, not a
+        # false-precision percentage. The raw fractions live in the per-month
+        # parquet for anyone who wants the detail.
+        dominant = "LLI-leaning" if lli >= lam else "LAM-leaning"
     npk = modes["n_peaks_med"] if "n_peaks_med" in modes else pd.Series(dtype=float)
     richness = round(float(npk.median()), 1) if npk.notna().any() else float("nan")
     return {
@@ -433,9 +454,11 @@ def main() -> None:
     cells_lookup = dict(zip(ident["system_id"], ident["cells_series"], strict=True))
     chem_lookup = dict(zip(ident["system_id"], ident["chemistry"], strict=True))
 
-    files = sorted(BRONZE_DIR.glob("*.parquet"))
+    files = sorted(SILVER_DIR.glob("*.parquet"))
     if not files:
-        raise SystemExit(f"no bronze parquets in {BRONZE_DIR}.")
+        raise SystemExit(
+            f"no cleaned parquets in {SILVER_DIR}. Run clean_temperatures first."
+        )
 
     print(f"degradation-mode estimation over {len(files)} systems\n", flush=True)
     all_modes: list[pd.DataFrame] = []
@@ -475,9 +498,15 @@ def main() -> None:
     safe_to_parquet(out, OUT_PATH, index=False, compression="snappy")
     print(f"\nwrote {OUT_PATH}: {len(out):,} (system × month) rows")
 
+    # Persist the per-system verdict too, so the dashboard reads a parquet
+    # instead of importing this module's reduction logic.
+    summary_df = pd.DataFrame(summaries)
+    safe_to_parquet(summary_df, SUMMARY_OUT_PATH, index=False, compression="snappy")
+    print(f"wrote {SUMMARY_OUT_PATH}: {len(summary_df)} systems")
+
     print("\nPer-system summary — note how cap-CoV (capacity confidence)")
     print("and peak-richness split by chemistry:")
-    print(pd.DataFrame(summaries).to_string(index=False))
+    print(summary_df.to_string(index=False))
 
 
 if __name__ == "__main__":

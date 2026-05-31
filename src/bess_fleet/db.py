@@ -2,14 +2,14 @@
 
 Mirrors the AWS Athena pattern: parquet files at rest, SQL on top. The
 single ``data/bess.duckdb`` file is just a catalogue — data lives in
-``data/lfp_1min/*.parquet`` and is read zero-copy. Delete the .duckdb
+``data/bronze_1min/*.parquet`` and is read zero-copy. Delete the .duckdb
 file any time and rerun ``build_views``; the underlying data is
 unaffected.
 
 Current scope (post-restructure 2026-05-16):
 
 * ``telemetry_1min`` — six LFP systems at 1-minute cadence, no cleaning
-  applied. Built by ``scripts/lfp_to_1min_parquet.py`` directly from the
+  applied. Built by ``bess_fleet.pipeline.raw_to_1min_parquet`` directly from the
   raw zips. Schema: timestamp, system_id, voltage_v, current_a, power_kw,
   temperature_c, ambient_c, interpolated_frac.
 
@@ -56,12 +56,13 @@ VIEWS: dict[str, str] = {
     #                         mode, is_idle, energy_*_step, c_rate)
     # identity              — per-system metadata (capacity, voltage, cells,
     #                         install date) from the Figgener XLSX
-    "telemetry_1min":       "lfp_1min/*.parquet",
+    "telemetry_1min":       "bronze_1min/*.parquet",
     "telemetry_1min_clean": "processed/*.parquet",
     "identity":             "identity.parquet",
     "daily_kpis":           "curated/daily_kpis.parquet",
     "threshold_events":     "curated/threshold_events.parquet",
     "degradation_modes":    "curated/degradation_modes.parquet",
+    "degradation_summary":  "curated/degradation_summary.parquet",
 }
 
 
@@ -96,6 +97,16 @@ def connect(read_only: bool = True) -> Iterator[duckdb.DuckDBPyConnection]:
     read_only:
         Default True. Set False only when the caller intends to mutate
         the catalogue (e.g. a build / maintenance script).
+
+    Concurrency note
+    ----------------
+    DuckDB is single-writer: one process may hold a read-write handle
+    only if no other process has the file open. So a pipeline rebuild
+    (``read_only=False``) cannot run while the Streamlit app holds the
+    catalogue open — stop the app first, or rebuild before launching it.
+    The underlying parquet is untouched either way; only the ``.duckdb``
+    catalogue is locked. For multi-writer needs, swap the engine for a
+    server (MotherDuck / Postgres) behind the same view contract.
     """
     DUCKDB_PATH.parent.mkdir(parents=True, exist_ok=True)
     if read_only and not DUCKDB_PATH.exists():

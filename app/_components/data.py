@@ -35,6 +35,7 @@ from .data_access import (
     get_daily_voltage_spread,
     get_data_window,
     get_degradation_modes,
+    get_degradation_summary,
     get_identity,
     get_telemetry,
     get_telemetry_bounds,
@@ -49,7 +50,7 @@ __all__ = [
     "get_telemetry", "get_telemetry_bounds", "get_data_window",
     "get_active_status", "get_daily_availability",
     "get_daily_soc_spread", "get_daily_voltage_spread",
-    "get_degradation_modes",
+    "get_degradation_modes", "get_degradation_summary",
     # analytics
     "compute_system_status",
     "compute_availability",

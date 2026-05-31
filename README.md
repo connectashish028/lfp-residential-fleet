@@ -46,7 +46,7 @@ src/bess_fleet/
 ├── db.py                       # DuckDB view registrar
 ├── recommendations.py          # operator-facing rule engine
 └── pipeline/                   # 8 idempotent build modules
-    ├── lfp_to_1min_parquet.py    bronze: raw zips → 1-min parquet
+    ├── raw_to_1min_parquet.py    bronze: raw zips → 1-min parquet
     ├── clean_temperatures.py     silver: sentinel scrub
     ├── load_identity.py          silver: XLSX → identity.parquet (+ chemistry)
     ├── derive_features.py        silver: ΔT, c_rate, energy_*

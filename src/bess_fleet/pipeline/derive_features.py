@@ -24,8 +24,8 @@ Currently derives:
 
 Run order (each script is idempotent; re-run any step to refresh):
 
-    1. python -m bess_fleet.pipeline.lfp_to_1min_parquet   # raw zip → data/lfp_1min/
-    2. python -m bess_fleet.pipeline.clean_temperatures    # data/lfp_1min/ → data/processed/
+    1. python -m bess_fleet.pipeline.raw_to_1min_parquet   # raw zip → data/bronze_1min/
+    2. python -m bess_fleet.pipeline.clean_temperatures    # data/bronze_1min/ → data/processed/
     3. python -m bess_fleet.pipeline.load_identity         # XLSX → data/identity.parquet
     4. python -m bess_fleet.pipeline.derive_features       # adds derived cols to data/processed/
 

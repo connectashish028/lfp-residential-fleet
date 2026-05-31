@@ -15,15 +15,13 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from bess_fleet.pipeline.degradation_modes import system_summary
-
 from .data_access import (
     NOTABLE_FINDINGS,
     SYSTEMS,
     get_active_status,
     get_daily_availability,
     get_daily_kpis,
-    get_degradation_modes,
+    get_degradation_summary,
     get_threshold_events,
 )
 
@@ -126,23 +124,12 @@ def compute_availability(window_days: int = 30) -> pd.DataFrame:
 def compute_degradation_summary() -> pd.DataFrame:
     """Per-system degradation verdict across every chemistry in the lake.
 
-    Reuses the pipeline's :func:`system_summary` so the dashboard and the
-    batch job can never disagree on the observability gate or the mode.
-    Columns: ``system_id``, ``chemistry``, ``n_months``, ``peak_richness``,
-    ``cap_cov``, ``fade_pct_per_yr``, ``fade_r2``, ``cap_observable``,
-    ``dominant_mode``.
+    Read straight from the pipeline's persisted ``degradation_summary``
+    parquet, so the dashboard consumes data rather than re-running the
+    pipeline's reduction. Columns: ``system_id``, ``chemistry``,
+    ``n_months``, ``peak_richness``, ``cap_cov``, ``fade_pct_per_yr``,
+    ``fade_r2``, ``cap_observable``, ``dominant_mode``.
     """
-    modes = get_degradation_modes()
-    cols = [
-        "system_id", "chemistry", "n_months", "peak_richness", "cap_cov",
-        "fade_pct_per_yr", "fade_r2", "cap_observable", "dominant_mode",
-    ]
-    if modes.empty:
-        return pd.DataFrame(columns=cols)
-    rows = [
-        system_summary(str(sid), str(grp["chemistry"].iloc[0]), grp)
-        for sid, grp in modes.groupby("system_id")
-    ]
-    return pd.DataFrame(rows).sort_values(["chemistry", "system_id"]).reset_index(drop=True)
+    return get_degradation_summary()
 
 

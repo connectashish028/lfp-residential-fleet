@@ -39,7 +39,7 @@ META_XLSX = (
 )
 OUT_PATH = DATA_DIR / "identity.parquet"
 
-# Active scope — must match SYSTEM_IDS in lfp_to_1min_parquet.py, grouped
+# Active scope — must match SYSTEM_IDS in raw_to_1min_parquet.py, grouped
 # by chemistry so the identity table carries the cross-chemistry mix.
 LFP_E:     frozenset[str] = frozenset({"ID14", "ID16", "ID17", "ID18", "ID19", "ID20"})  # Mfr E · LFP
 LMO_NMC_A: frozenset[str] = frozenset({"ID01", "ID02"})                                  # Mfr A · LMO/NMC blend

@@ -88,6 +88,19 @@ kpis.stat_grid([
     {"label": "Install date",    "value": pd.to_datetime(ident_row['install_date']).strftime("%Y-%m"), "unit": ""},
 ])
 
+# Approximate-SoC caveat for non-LFP systems — their OCV→SoC curves are
+# literature, not cell-calibrated, so SoC (and the SoC-closure RTE gate)
+# carry a few-percent bias. Surface it in the UI rather than bury it in code.
+_chem = str(ident_row.get("chemistry", "LFP"))
+if _chem != "LFP":
+    st.warning(
+        f"**{sid} is {_chem}** — SoC and the RTE confidence gate use a "
+        "literature-approximate OCV curve (not cell-calibrated), so treat "
+        "the SoC and RTE figures here as *indicative*. The Degradation page "
+        "is the chemistry-robust diagnostic for this system.",
+        icon="⚠️",
+    )
+
 
 # ── KPI strip — 30-day windows relative to this rack's own last sample
 kpi_df = data.get_daily_kpis()

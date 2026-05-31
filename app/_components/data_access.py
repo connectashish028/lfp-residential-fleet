@@ -88,6 +88,19 @@ def get_degradation_modes() -> pd.DataFrame:
     return df
 
 
+@st.cache_data(ttl=3600)
+def get_degradation_summary() -> pd.DataFrame:
+    """Per-system degradation verdict, precomputed by the pipeline.
+
+    Reads ``degradation_summary.parquet`` so the dashboard consumes data,
+    not the pipeline's reduction code.
+    """
+    with connect() as con:
+        return con.sql(
+            "SELECT * FROM degradation_summary ORDER BY chemistry, system_id"
+        ).df()
+
+
 # ─── Telemetry — windowed, capped so we bound entries ─────────────────
 @st.cache_data(ttl=3600, max_entries=10, show_spinner="loading telemetry…")
 def get_telemetry(system_id: str, start: datetime, end: datetime) -> pd.DataFrame:

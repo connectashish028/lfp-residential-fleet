@@ -1,6 +1,6 @@
-"""Clean temperature sentinel values from the 1-min LFP parquets.
+"""Clean temperature sentinel values from the 1-min bronze parquets.
 
-Reads raw per-system parquets from ``data/lfp_1min/`` and writes the
+Reads raw per-system parquets from ``data/bronze_1min/`` and writes the
 cleaned versions to ``data/processed/``. The raw layer is **untouched**
 so the original Figgener sentinels are preserved for audit.
 
@@ -26,7 +26,7 @@ import pandas as pd
 from bess_fleet.db import DATA_DIR
 from bess_fleet.io import safe_to_parquet
 
-RAW_DIR = DATA_DIR / "lfp_1min"
+RAW_DIR = DATA_DIR / "bronze_1min"
 OUT_DIR = DATA_DIR / "processed"
 
 

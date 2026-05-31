@@ -66,10 +66,10 @@ show = summary.assign(
 ).rename(columns={
     "system_id": "system", "n_months": "months", "peak_richness": "ICA peaks",
     "cap_cov": "capacity CoV", "fade_pct_per_yr": "fade %/yr",
-    "fade_r2": "fade R²", "dominant_mode": "mode",
+    "fade_r2": "fade R²", "dominant_mode": "mode (heuristic)",
 })[[
     "system", "chemistry", "months", "capacity CoV", "fade %/yr", "fade R²",
-    "ICA peaks", "observable", "mode",
+    "ICA peaks", "observable", "mode (heuristic)",
 ]]
 st.dataframe(show, width="stretch", hide_index=True)
 
@@ -94,8 +94,9 @@ modes_sys = modes[modes["system_id"] == pick]
 if bool(row["cap_observable"]):
     verdict = (
         f"**{pick}** ({row['chemistry']}) is **observable** — fade "
-        f"{row['fade_pct_per_yr']:.2f} %/yr (R²={row['fade_r2']:.2f}), "
-        f"dominant mode **{row['dominant_mode']}**."
+        f"{row['fade_pct_per_yr']:.2f} %/yr (R²={row['fade_r2']:.2f}). "
+        f"Mechanism **{row['dominant_mode']}** *(heuristic — wants lab EIS / "
+        "reference cycling to confirm)*."
     )
 else:
     cov = row["cap_cov"]

@@ -1,6 +1,6 @@
-"""Convert the six LFP raw zips into 1-minute-cadence parquet files.
+"""Convert the raw per-system zips into 1-minute-cadence parquet files.
 
-Output: ``data/lfp_1min/ID{NN}.parquet`` — one file per system. Aggregates
+Output: ``data/bronze_1min/ID{NN}.parquet`` — one file per system. Aggregates
 the 1-second raw measurements to 1-minute means. **No cleaning rules
 applied** — the user wants the raw 1-min cadence as a starting point for
 their own cleaning workflow.
@@ -30,7 +30,7 @@ pipeline stays untouched.
 
 Run with:
 
-    python -m bess_fleet.pipeline.lfp_to_1min_parquet
+    python -m bess_fleet.pipeline.raw_to_1min_parquet
 
 Expected run time: ~30-40 min on a laptop (CSV read + date parse dominate).
 """
@@ -88,7 +88,7 @@ LMO_NMC_A: frozenset[str] = frozenset({"ID01", "ID02"})                         
 NMC_BC:    frozenset[str] = frozenset({"ID07", "ID11"})                                  # Mfr B/C · pure NMC
 SYSTEM_IDS: frozenset[str] = LFP_E | LMO_NMC_A | NMC_BC
 FREQ = "1min"
-OUT_DIR = DATA_DIR / "lfp_1min"
+OUT_DIR = DATA_DIR / "bronze_1min"
 
 # Local rename map — extends the production one with Interpolated.
 _CSV_COLS_RENAME = {

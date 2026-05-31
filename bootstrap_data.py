@@ -18,7 +18,7 @@ Place the dataset zips at::
 
 Pipeline steps (each idempotent — re-run any step alone)
 --------------------------------------------------------
-1. ``lfp_to_1min_parquet``      raw zips → 1-min parquet (bronze)
+1. ``raw_to_1min_parquet``      raw zips → 1-min parquet (bronze)
 2. ``clean_temperatures``       sentinel scrub (-100 °C → NULL)
 3. ``load_identity``            XLSX → identity.parquet
 4. ``derive_features``          + ΔT, mode, energy_*, c_rate
@@ -48,7 +48,7 @@ RAW_DIR = Path("data/raw/figgener_meta")
 _UTF8_ENV = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
 
 PIPELINE_MODULES = [
-    "bess_fleet.pipeline.lfp_to_1min_parquet",
+    "bess_fleet.pipeline.raw_to_1min_parquet",
     "bess_fleet.pipeline.clean_temperatures",
     "bess_fleet.pipeline.load_identity",
     "bess_fleet.pipeline.derive_features",
