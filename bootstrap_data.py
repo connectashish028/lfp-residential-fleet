@@ -25,6 +25,7 @@ Pipeline steps (each idempotent — re-run any step alone)
 5. ``derive_soc``               + OCV-corrected SoC
 6. ``build_daily_kpis``         daily aggregates (gold)
 7. ``detect_threshold_events``  rule-based events (gold)
+8. ``degradation_modes``        ICA/DVA degradation-mode signatures (gold)
 
 Total runtime: ~3-5 min on a modern laptop. Outputs ~700 MB total.
 
@@ -48,6 +49,7 @@ PIPELINE_MODULES = [
     "bess_fleet.pipeline.derive_soc",
     "bess_fleet.pipeline.build_daily_kpis",
     "bess_fleet.pipeline.detect_threshold_events",
+    "bess_fleet.pipeline.degradation_modes",
 ]
 
 

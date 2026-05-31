@@ -74,15 +74,18 @@ def _months(zip_members: Iterable[str]) -> list[str]:
     return [n for _, n in sorted(keep)]
 # ──────────────────────────────────────────────────────────────────────────
 
-# Active scope: all six LFP systems in the Figgener fleet. Per-system
-# KPIs (RTE, EFC, throughput, idle fraction, mean ΔT) stand on each
-# rack's own record — no cross-rack alignment needed. Peer-comparison
-# detection, which does need ≥3 hardware-identical racks, is restricted
-# downstream to the 3-rack 8.09 kWh subgroup {ID14, ID16, ID17}; this
-# script doesn't enforce that.
-LFP_IDS: frozenset[str] = frozenset(
-    {"ID14", "ID16", "ID17", "ID18", "ID19", "ID20"}
-)
+# Active scope, grouped by chemistry. The Figgener dataset (Zenodo
+# 12091223) spans 21 systems across three cathode chemistries; this is
+# the subset we ingest into the lake. The cross-chemistry mix is
+# deliberate: the diagnostics downstream are validated to behave
+# differently on a flat-OCV LFP plateau vs a sloped NMC/LMO curve, and
+# that contrast is the point.
+#
+# Per-system KPIs (RTE, EFC, throughput, idle fraction, mean ΔT) stand
+# on each rack's own record — no cross-rack alignment needed.
+LFP_E:     frozenset[str] = frozenset({"ID14", "ID16", "ID17", "ID18", "ID19", "ID20"})  # Mfr E · LFP
+LMO_NMC_A: frozenset[str] = frozenset({"ID01", "ID02"})                                  # Mfr A · LMO/NMC blend
+SYSTEM_IDS: frozenset[str] = LFP_E | LMO_NMC_A
 FREQ = "1min"
 OUT_DIR = DATA_DIR / "lfp_1min"
 
@@ -161,21 +164,29 @@ def _resample_zip(zip_path: Path) -> pd.DataFrame:
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     zips = sorted((DATA_DIR / "raw").glob("Data_ID_*.zip"))
-    lfp_zips = [z for z in zips if _system_id_from_zip(z) in LFP_IDS]
-    if not lfp_zips:
-        raise SystemExit(f"no LFP zips matched {sorted(LFP_IDS)}")
-    print(f"processing {len(lfp_zips)} LFP zips at {FREQ} cadence", flush=True)
+    in_scope = [z for z in zips if _system_id_from_zip(z) in SYSTEM_IDS]
+    if not in_scope:
+        raise SystemExit(f"no zips matched {sorted(SYSTEM_IDS)}")
+    print(f"{len(in_scope)} systems in scope at {FREQ} cadence", flush=True)
     print(f"output: {OUT_DIR}\n", flush=True)
 
     total_rows = 0
-    for zp in lfp_zips:
+    for zp in in_scope:
+        sid = _system_id_from_zip(zp)
+        out_path = OUT_DIR / f"{sid}.parquet"
+        # Incremental: a system's bronze parquet is a deterministic
+        # function of its raw zip, so skip systems already resampled
+        # unless the zip is newer. raw→1-min resampling is by far the
+        # costliest step (1-second data), so this makes adding a system
+        # cheap instead of reprocessing the whole fleet.
+        if out_path.exists() and out_path.stat().st_mtime >= zp.stat().st_mtime:
+            print(f"  [{sid}] skip — {out_path.name} already up to date", flush=True)
+            continue
         try:
             df = _resample_zip(zp)
         except (zipfile.BadZipFile, OSError) as exc:
             print(f"  [skip] {zp.name}: {exc}", flush=True)
             continue
-        sid = df["system_id"].iloc[0]
-        out_path = OUT_DIR / f"{sid}.parquet"
         safe_to_parquet(df, out_path, index=False, compression="snappy")
         size_mb = out_path.stat().st_size / 1e6
         interp_mean = float(df["interpolated_frac"].mean())

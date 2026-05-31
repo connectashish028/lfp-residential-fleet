@@ -13,7 +13,7 @@ Algorithm
 1. **Rest detection.** ``|power_kw| × 1000 < 50 W`` sustained for ≥30
    continuous min → the cell has relaxed; terminal voltage ≈ OCV.
 2. **OCV anchor.** At each rest-period start, look up SoC from the
-   literature LFP OCV curve (:data:`OCV_SOC_TABLE`).
+   chemistry-specific OCV curve (:data:`OCV_SOC_TABLES`).
 3. **Coulomb count.** Unanchored cumulative ``Σ I·Δt / Q`` (Δt = 1/60 h,
    Q = ``capacity_ah`` from the identity table).
 4. **Drift correction.** At every anchor, residual ``cc − anchor`` is
@@ -80,36 +80,72 @@ from bess_fleet.io import safe_to_parquet
 PROCESSED_DIR = DATA_DIR / "processed"
 IDENTITY_PATH = DATA_DIR / "identity.parquet"
 
-# Literature LFP open-circuit voltage curve. The plateau between SoC
-# 20–80 % is what makes voltage-alone SoC useless on this chemistry —
-# 60 % of the operating range is compressed into 60 mV of cell voltage.
-# Coulomb counting fills that gap; this lookup just anchors it.
-OCV_SOC_TABLE = np.array([
-    [0,   2.500], [1,   2.950], [5,   3.100], [10, 3.200], [20, 3.270],
-    [30,  3.300], [50,  3.310], [70,  3.320], [80,  3.330], [90, 3.360],
-    [95,  3.440], [99,  3.550], [100, 3.650],
-])
+# Open-circuit-voltage → SoC curves, one per cathode chemistry. The
+# whole reason this is a dict and not a single constant is the
+# cross-chemistry remit: apply an LFP table to an NMC cell and every
+# voltage above 3.65 V maps to 100 % SoC, so the estimate pegs full and
+# is garbage. Selecting the curve by chemistry is the *minimum* a
+# cross-chemistry estimator must do — the headline example of why one
+# method doesn't transfer between chemistries unchanged.
+#
+# LFP is measured-grade for this fleet (Mfr E). NMC and LMO/NMC are
+# LITERATURE-APPROXIMATE monotonic graphite-anode curves: good enough to
+# anchor coulomb counting, but NOT cell-calibrated, so absolute SoC on
+# those systems carries a few-percent bias. The degradation-mode
+# diagnostic deliberately works in V–Q space and does *not* depend on
+# these tables, so that approximation never reaches the headline result.
+OCV_SOC_TABLES: dict[str, np.ndarray[Any, Any]] = {
+    # Flat plateau 20–80 %: ~60 % of range in ~60 mV — voltage-alone SoC
+    # is useless here, which is exactly why coulomb counting carries it.
+    "LFP": np.array([
+        [0,   2.500], [1,   2.950], [5,   3.100], [10, 3.200], [20, 3.270],
+        [30,  3.300], [50,  3.310], [70,  3.320], [80,  3.330], [90, 3.360],
+        [95,  3.440], [99,  3.550], [100, 3.650],
+    ]),
+    # Monotonic, well-sloped — voltage carries real SoC information, and
+    # that slope is what gives ICA/DVA its richer multi-peak structure.
+    "NMC": np.array([
+        [0, 3.00], [5, 3.45], [10, 3.55], [20, 3.62], [30, 3.67],
+        [40, 3.72], [50, 3.78], [60, 3.85], [70, 3.93], [80, 4.02],
+        [90, 4.11], [95, 4.15], [100, 4.20],
+    ]),
+    # LMO/NMC blend (Mfr A, ~3.67 V nominal/cell): sloped but centred
+    # lower than pure NMC.
+    "LMO": np.array([
+        [0, 2.90], [5, 3.30], [10, 3.45], [20, 3.58], [30, 3.64],
+        [40, 3.68], [50, 3.72], [60, 3.78], [70, 3.85], [80, 3.93],
+        [90, 4.05], [95, 4.12], [100, 4.20],
+    ]),
+}
+# Unknown chemistry → fall back to LFP (the fleet's measured-grade
+# curve); main() logs the substitution so it's never silent.
+_DEFAULT_CHEMISTRY = "LFP"
 
 REST_THRESHOLD_W  = 50    # |P| < 50 W → effectively idle on a ~8 kWh system
 REST_DURATION_MIN = 30    # idle this long → cell relaxed → V ≈ OCV
 DT_HOURS          = 1.0 / 60.0
 
 
-def ocv_to_soc(cell_voltage_v: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
-    """LFP-cell OCV [V] → SoC [%] via 1-D linear interpolation.
+def ocv_to_soc(
+    cell_voltage_v: np.ndarray[Any, Any],
+    chemistry: str = _DEFAULT_CHEMISTRY,
+) -> np.ndarray[Any, Any]:
+    """Cell OCV [V] → SoC [%] via 1-D interpolation on the chemistry curve.
 
-    Saturates flat outside the table range — values below 2.50 V map
-    to 0 %, above 3.65 V to 100 %. That's the right behaviour for a
-    relaxed cell: a reading outside the OCV curve almost always means
-    we hit an edge of the lookup, not that the cell is over/under.
+    Saturates flat outside the table range — a relaxed-cell reading
+    beyond the curve almost always means we hit a lookup edge, not that
+    the cell is genuinely over/under. Unknown chemistries fall back to
+    the LFP curve.
     """
-    return np.interp(cell_voltage_v, OCV_SOC_TABLE[:, 1], OCV_SOC_TABLE[:, 0])
+    table = OCV_SOC_TABLES.get(chemistry, OCV_SOC_TABLES[_DEFAULT_CHEMISTRY])
+    return np.interp(cell_voltage_v, table[:, 1], table[:, 0])
 
 
 def derive_soc(
     df: pd.DataFrame,
     capacity_ah: float,
     cells_series: int,
+    chemistry: str = _DEFAULT_CHEMISTRY,
 ) -> pd.DataFrame:
     """OCV-corrected SoC for one system's cleaned 1-min frame.
 
@@ -124,6 +160,9 @@ def derive_soc(
     cells_series
         Number of cells in series — used to derive cell voltage from
         pack voltage for the OCV lookup.
+    chemistry
+        Cathode chemistry (``"LFP"`` / ``"NMC"`` / ``"LMO"``) selecting
+        which OCV→SoC curve anchors the coulomb count. Defaults to LFP.
 
     Returns
     -------
@@ -157,7 +196,9 @@ def derive_soc(
 
     # ─ Step 2: OCV-anchor lookups ──────────────────────────────────────
     anchor_soc = pd.Series(np.nan, index=work.index)
-    anchor_soc.loc[is_anchor] = ocv_to_soc(cell_v.loc[is_anchor].to_numpy())
+    anchor_soc.loc[is_anchor] = ocv_to_soc(
+        cell_v.loc[is_anchor].to_numpy(), chemistry
+    )
 
     # ─ Step 3: coulomb counting (unanchored cumulative integral) ───────
     delta_soc_pct = work["current_a"] * DT_HOURS / capacity_ah * 100.0
@@ -197,6 +238,7 @@ def main() -> None:
     ident = pd.read_parquet(IDENTITY_PATH)
     cap_lookup   = dict(zip(ident["system_id"], ident["capacity_ah"],   strict=True))
     cells_lookup = dict(zip(ident["system_id"], ident["cells_series"],  strict=True))
+    chem_lookup  = dict(zip(ident["system_id"], ident["chemistry"],     strict=True))
 
     print(
         f"deriving SoC for {len(files)} parquets in {PROCESSED_DIR}\n",
@@ -213,17 +255,26 @@ def main() -> None:
         # Drop any prior derivation so re-runs are clean
         df = df.drop(columns=["soc_pct", "is_soc_anchor"], errors="ignore")
 
+        chemistry = str(chem_lookup.get(sid, _DEFAULT_CHEMISTRY))
+        if chemistry not in OCV_SOC_TABLES:
+            print(
+                f"  [{sid}] no OCV curve for chemistry {chemistry!r} — "
+                f"falling back to {_DEFAULT_CHEMISTRY}",
+                flush=True,
+            )
+
         out = derive_soc(
             df,
             capacity_ah=float(cap_lookup[sid]),
             cells_series=int(cells_lookup[sid]),
+            chemistry=chemistry,
         )
         safe_to_parquet(out, path, index=False, compression="snappy")
 
         soc = out["soc_pct"]
         n_anch = int(out["is_soc_anchor"].sum())
         print(
-            f"  [{sid}] anchors={n_anch:>5,}  "
+            f"  [{sid}] {chemistry:<3}  anchors={n_anch:>5,}  "
             f"SoC μ={soc.mean():5.1f}%  median={soc.median():5.1f}%  "
             f"range=[{soc.min():5.1f}, {soc.max():5.1f}]  "
             f"rows={len(out):,}",

@@ -1,8 +1,11 @@
 """Build the per-system identity table from the Figgener metadata XLSX.
 
 Reads ``data/raw/figgener_meta/00_Data/00_Metadata/Metadata_Systems.xlsx``,
-filters to the six LFP systems in scope, and writes
-``data/identity.parquet`` with operator-friendly column names.
+filters to the systems in scope (cross-chemistry), and writes
+``data/identity.parquet`` with operator-friendly column names. The
+``chemistry`` column it carries is what lets every downstream stage —
+SoC OCV-table selection, degradation-mode signatures — branch on
+chemistry instead of assuming LFP.
 
 Columns written:
 
@@ -35,10 +38,11 @@ META_XLSX = (
 )
 OUT_PATH = DATA_DIR / "identity.parquet"
 
-# Active scope — the 6 LFP systems whose 1-min parquets live in data/lfp_1min/.
-LFP_IDS: frozenset[str] = frozenset(
-    {"ID14", "ID16", "ID17", "ID18", "ID19", "ID20"}
-)
+# Active scope — must match SYSTEM_IDS in lfp_to_1min_parquet.py, grouped
+# by chemistry so the identity table carries the cross-chemistry mix.
+LFP_E:     frozenset[str] = frozenset({"ID14", "ID16", "ID17", "ID18", "ID19", "ID20"})  # Mfr E · LFP
+LMO_NMC_A: frozenset[str] = frozenset({"ID01", "ID02"})                                  # Mfr A · LMO/NMC blend
+SYSTEM_IDS: frozenset[str] = LFP_E | LMO_NMC_A
 
 
 def main() -> None:
@@ -70,7 +74,7 @@ def main() -> None:
         "Cell_number_in_parallel": "cells_parallel",
     }
     identity = (
-        meta[meta["system_id"].isin(LFP_IDS)][keep_cols]
+        meta[meta["system_id"].isin(SYSTEM_IDS)][keep_cols]
         .rename(columns=rename)
         .sort_values("system_id")
         .reset_index(drop=True)

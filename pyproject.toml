@@ -12,6 +12,7 @@ license = { text = "MIT" }
 dependencies = [
     "pandas>=2.2",
     "numpy>=1.26",
+    "scipy>=1.13",     # ICA/DVA: Savitzky-Golay smoothing + peak detection
     "pyarrow>=16.0",
     "duckdb>=1.0",
     "openpyxl>=3.1",   # for reading the Figgener metadata XLSX

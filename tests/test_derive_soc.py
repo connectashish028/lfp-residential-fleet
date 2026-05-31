@@ -16,7 +16,7 @@ import pandas as pd
 import pytest
 
 from bess_fleet.pipeline.derive_soc import (
-    OCV_SOC_TABLE,
+    OCV_SOC_TABLES,
     derive_soc,
     ocv_to_soc,
 )
@@ -44,12 +44,12 @@ class TestOcvToSoc:
         assert ocv_to_soc(np.array([4.0]))[0] == pytest.approx(100.0)
 
     def test_monotonic_across_full_table(self) -> None:
-        """OCV → SoC must be monotonically non-decreasing across the
-        whole table. If this fails, the table itself has been corrupted."""
-        voltages = OCV_SOC_TABLE[:, 1]
-        socs = ocv_to_soc(voltages)
-        diffs = np.diff(socs)
-        assert (diffs >= -1e-9).all(), "OCV→SoC table is not monotonic"
+        """OCV → SoC must be monotonically non-decreasing across every
+        chemistry table. If this fails, a table itself has been corrupted."""
+        for chem, table in OCV_SOC_TABLES.items():
+            socs = ocv_to_soc(table[:, 1], chem)
+            diffs = np.diff(socs)
+            assert (diffs >= -1e-9).all(), f"{chem} OCV→SoC table is not monotonic"
 
     def test_plateau_interpolates_linearly(self) -> None:
         """In the LFP plateau (3.30 → 3.31 V is 30% → 50% SoC),
@@ -58,6 +58,26 @@ class TestOcvToSoc:
         # Row at 3.30 V = 30 %, row at 3.31 V = 50 %. Midpoint:
         result = ocv_to_soc(np.array([3.305]))[0]
         assert 30.0 < result < 50.0
+
+    def test_chemistry_selects_different_curve(self) -> None:
+        """The cross-chemistry guarantee: the same cell voltage must map
+        to a different SoC under different chemistries. 3.78 V sits mid-
+        range on NMC (~50 %) but is off the top of the LFP plateau, so
+        LFP saturates it to 100 %. If these ever collapse to the same
+        number, chemistry selection has silently broken."""
+        v = np.array([3.78])
+        soc_lfp = ocv_to_soc(v, "LFP")[0]
+        soc_nmc = ocv_to_soc(v, "NMC")[0]
+        assert soc_lfp == pytest.approx(100.0)
+        assert 40.0 < soc_nmc < 60.0
+
+    def test_unknown_chemistry_falls_back_to_lfp(self) -> None:
+        """An unrecognised chemistry must fall back to the LFP curve
+        rather than raise — main() logs the substitution separately."""
+        v = np.array([3.305])
+        assert ocv_to_soc(v, "solid-state")[0] == pytest.approx(
+            ocv_to_soc(v, "LFP")[0]
+        )
 
 
 # ─── derive_soc — algorithm behaviour ───────────────────────────────
