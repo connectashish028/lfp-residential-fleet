@@ -56,6 +56,7 @@ PIPELINE_MODULES = [
     "bess_fleet.pipeline.build_daily_kpis",
     "bess_fleet.pipeline.detect_threshold_events",
     "bess_fleet.pipeline.degradation_modes",
+    "bess_fleet.pipeline.capacity_estimation",
 ]
 
 
