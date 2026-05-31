@@ -58,6 +58,15 @@ needs_degradation = pytest.mark.skipif(
     ),
 )
 
+CAPACITY_SOH = REPO_ROOT / "data" / "curated" / "capacity_soh.parquet"
+needs_capacity = pytest.mark.skipif(
+    not CAPACITY_SOH.exists(),
+    reason=(
+        f"SOHc page test needs {CAPACITY_SOH.name} — run "
+        "`python -m bess_fleet.pipeline.capacity_estimation` first."
+    ),
+)
+
 
 # ─── Fleet Overview page ─────────────────────────────────────────────
 
@@ -222,3 +231,32 @@ class TestDegradationPage:
         options = [str(o) for o in at.selectbox[0].options]
         # At least one observable NMC-family system should be selectable.
         assert any("ID02" in o or "ID11" in o for o in options)
+
+
+# ─── SOHc (capacity) page ────────────────────────────────────────────
+
+
+@needs_capacity
+class TestSohcPage:
+    """The Figgener capacity page must render, surface the SOHc/ageing
+    framing + reliability gate, and offer a per-system series selector."""
+
+    PAGE = "app/pages/3_SOHc.py"
+
+    def test_page_runs_without_exception(self) -> None:
+        at = AppTest.from_file(str(REPO_ROOT / self.PAGE), default_timeout=45).run()
+        assert not at.exception, f"Page raised: {at.exception}"
+
+    def test_surfaces_sohc_and_reliability(self) -> None:
+        at = AppTest.from_file(str(REPO_ROOT / self.PAGE), default_timeout=45).run()
+        rendered = " ".join(m.value for m in at.markdown).lower()
+        assert "sohc" in rendered
+        assert "reliab" in rendered          # reliability gate framing
+        assert "ageing" in rendered
+
+    def test_reliable_system_selectable(self) -> None:
+        at = AppTest.from_file(str(REPO_ROOT / self.PAGE), default_timeout=45).run()
+        assert len(at.selectbox) >= 1
+        options = [str(o) for o in at.selectbox[0].options]
+        # A reliable LFP system (ID16) should be offered.
+        assert any("ID16" in o for o in options)

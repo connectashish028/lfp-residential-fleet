@@ -842,3 +842,48 @@ def capacity_fade_trend(modes_sys: pd.DataFrame, height: int = 300) -> go.Figure
     return fig
 
 
+def capacity_soh_timeseries(
+    est_sys: pd.DataFrame, fade_pct_per_yr: float, height: int = 340,
+) -> go.Figure:
+    """SOHc estimates over time with the ageing trend + a 75 % CI band —
+    the paper's Fig 4. Each point is one full-cycle capacity estimate; the
+    band is the trend ± 1.15·median σ (≈ central 75 % for a normal)."""
+    df = est_sys.sort_values("timestamp")
+    fig = go.Figure()
+    if len(df) >= 4 and np.isfinite(fade_pct_per_yr):
+        t0 = df["timestamp"].iloc[0]
+        t_yr = (df["timestamp"] - t0).dt.total_seconds().to_numpy() / (365.25 * 86400)
+        coef = np.polyfit(t_yr, df["soh_pct"].to_numpy(dtype=float), 1)
+        trend = np.polyval(coef, t_yr)
+        half = 1.15 * float(np.nanmedian(df["sigma_soh_pp"]))
+        # CI band (drawn first so points sit on top).
+        fig.add_trace(go.Scatter(
+            x=pd.concat([df["timestamp"], df["timestamp"][::-1]]),
+            y=np.concatenate([trend + half, (trend - half)[::-1]]),
+            fill="toself", fillcolor="rgba(37,99,235,0.10)",
+            line=dict(width=0), hoverinfo="skip", showlegend=False,
+        ))
+        fig.add_trace(go.Scatter(
+            x=df["timestamp"], y=trend, mode="lines",
+            line=dict(color=t.SEV_CRITICAL, width=2),
+            name=f"{fade_pct_per_yr:.1f} %/yr", hoverinfo="skip",
+        ))
+    fig.add_trace(go.Scatter(
+        x=df["timestamp"], y=df["soh_pct"], mode="markers",
+        marker=dict(size=4, color=t.ACTUAL, opacity=0.45),
+        name="estimate",
+        hovertemplate="%{x|%Y-%m-%d}: %{y:.1f}%<extra></extra>",
+    ))
+    fig.add_hline(y=100, line_dash="dot", line_color=t.TEXT_30, line_width=1)
+    fig.add_hline(
+        y=80, line_dash="dash", line_color=t.SEV_WARNING, line_width=1,
+        annotation_text="EOL 80 %", annotation_position="bottom right",
+        annotation_font=dict(family="JetBrains Mono, monospace", size=10, color=t.SEV_WARNING),
+    )
+    fig.update_layout(**_base_layout(height=height), showlegend=False)
+    fig.update_layout(hovermode="closest")
+    fig.update_yaxes(title_text="SOHc [%]")
+    fig.update_xaxes(title_text="")
+    return fig
+
+

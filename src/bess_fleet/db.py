@@ -63,6 +63,8 @@ VIEWS: dict[str, str] = {
     "threshold_events":     "curated/threshold_events.parquet",
     "degradation_modes":    "curated/degradation_modes.parquet",
     "degradation_summary":  "curated/degradation_summary.parquet",
+    "capacity_estimates":   "curated/capacity_estimates.parquet",
+    "capacity_soh":         "curated/capacity_soh.parquet",
 }
 
 

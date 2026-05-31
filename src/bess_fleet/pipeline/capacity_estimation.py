@@ -81,6 +81,7 @@ REST_MIN_MIN   = 20       # a usable relaxation lasts at least this long
 REST_GAP_MIN   = 3.0      # >this between 1-min samples ends a rest
 TOP_PCTL       = 80.0     # rest cell-V ≥ this system percentile → near-full
 BOTTOM_PCTL    = 20.0     # rest cell-V ≤ this system percentile → near-empty
+MIN_REST_CELL_V = 2.0     # below this the cell is 'off'/disconnected, not at rest
 
 # ─── 2nd-order ECM bounds (eq. 1) ──────────────────────────────────────────
 TAU_FAST_BOUNDS = (3.0, 180.0)      # s — charge transfer
@@ -93,6 +94,12 @@ ECM_MIN_POINTS_1MIN = 15           # ~15 min of 1-min samples is enough for the
 # ─── Capacity gating ───────────────────────────────────────────────────────
 MIN_SOC_SWING  = 0.40     # only trust estimates spanning ≥40 % SOC
 MIN_MONTHS_FIT = 4        # below this, no ageing rate is published
+
+# Reliability gate for the published ageing rate (per system).
+MIN_RELIABLE_EST   = 20      # need a decent number of full-cycle estimates
+SIGMA_MAX_PP       = 8.0     # mean per-estimate σ above this → too noisy
+CI95_MAX_PP_YR     = 1.5     # ageing-rate 95 % CI above this → untrustworthy
+FADE_PLAUSIBLE_PP_YR = (-0.5, 10.0)   # outside this is physically implausible
 
 
 @dataclass
@@ -214,7 +221,9 @@ def detect_rest_windows(
         return []
     work = df.sort_values("timestamp").reset_index(drop=True)
     ts = pd.to_datetime(work["timestamp"]).dt.tz_localize(None)
-    current = work["current_a"].to_numpy(dtype=float)
+    # NaN-fill the current before integrating — a single NaN poisons the
+    # whole cumulative sum downstream (this is what zeroed ID02's offset).
+    current = np.nan_to_num(work["current_a"].to_numpy(dtype=float), nan=0.0)
     cell_v = work["voltage_v"].to_numpy(dtype=float) / cells_series
     power_w = work["power_kw"].to_numpy(dtype=float) * 1000.0
 
@@ -225,18 +234,26 @@ def detect_rest_windows(
     dt_h = np.clip(dt_h, 0.0, REST_GAP_MIN / 60.0)   # don't integrate across gaps
     cum_ah = np.cumsum(current * dt_h)
 
-    resting = np.abs(power_w) < REST_POWER_W
+    # A real relaxation needs low power AND a plausible cell voltage —
+    # exclude 'system off' / disconnected samples sitting near 0 V (these
+    # are resting by power but are not battery relaxations).
+    resting = (
+        (np.abs(power_w) < REST_POWER_W)
+        & np.isfinite(cell_v)
+        & (cell_v > MIN_REST_CELL_V)
+    )
     # Segment contiguous rest runs (break on non-rest or a data gap).
     gap = np.concatenate([[True], (np.diff(ts.to_numpy()).astype("timedelta64[s]")
                                    .astype(float) / 60.0) > REST_GAP_MIN])
     seg_start = (~resting) | np.concatenate([[True], ~resting[:-1]]) | gap
 
-    # System-adaptive top/bottom thresholds from resting cell voltages.
+    # System-adaptive top/bottom thresholds. nan-percentile so a stray NaN
+    # cell-voltage can't blank the thresholds (this zeroed ID18's rests).
     rest_v = cell_v[resting]
     if rest_v.size < 50:
         return []
-    v_top = float(np.percentile(rest_v, TOP_PCTL))
-    v_bot = float(np.percentile(rest_v, BOTTOM_PCTL))
+    v_top = float(np.nanpercentile(rest_v, TOP_PCTL))
+    v_bot = float(np.nanpercentile(rest_v, BOTTOM_PCTL))
 
     # Linear-time: walk contiguous segments via their boundaries; a
     # segment is a rest iff every row in it is resting. (No per-segment
@@ -461,7 +478,7 @@ def weighted_ageing_fit(est: pd.DataFrame, sid: str, chemistry: str) -> dict[str
         "system_id": sid, "chemistry": chemistry, "n_estimates": int(len(est)),
         "ageing_pct_per_yr": float("nan"), "ageing_ci95_pp_yr": float("nan"),
         "mean_sigma_pp": float("nan"), "ci75_width_pp": float("nan"),
-        "soh_latest_pct": float("nan"),
+        "soh_latest_pct": float("nan"), "reliable": False,
     }
     if est.empty:
         return base
@@ -473,7 +490,8 @@ def weighted_ageing_fit(est: pd.DataFrame, sid: str, chemistry: str) -> dict[str
     sig = np.where(np.isfinite(sig) & (sig > 0.1), sig, np.nanmedian(sig[sig > 0]) if (sig > 0).any() else 1.0)
 
     n_months = int(e["timestamp"].dt.to_period("M").nunique())
-    base["mean_sigma_pp"] = round(float(np.mean(sig)), 2)
+    mean_sigma = round(float(np.mean(sig)), 2)
+    base["mean_sigma_pp"] = mean_sigma
     base["soh_latest_pct"] = round(float(np.median(soh[-3:])), 1)
     # 75 % band of estimates around their median (paper-style CI width).
     base["ci75_width_pp"] = round(float(np.percentile(soh, 87.5) - np.percentile(soh, 12.5)), 1)
@@ -483,8 +501,21 @@ def weighted_ageing_fit(est: pd.DataFrame, sid: str, chemistry: str) -> dict[str
     coeffs, cov = np.polyfit(t_yr, soh, 1, w=1.0 / sig, cov=True)
     slope, _intercept = coeffs
     se_slope = float(np.sqrt(abs(cov[0, 0])))
-    base["ageing_pct_per_yr"] = round(float(-slope), 2)
-    base["ageing_ci95_pp_yr"] = round(1.96 * se_slope, 2)
+    fade = float(-slope)
+    ci95 = float(1.96 * se_slope)
+    base["ageing_pct_per_yr"] = round(fade, 2)
+    base["ageing_ci95_pp_yr"] = round(ci95, 2)
+    # Reliability gate — an estimate set is only trustworthy when there are
+    # enough clean full cycles. Like the degradation module, the framework
+    # flags where it can't be believed rather than emitting a confident
+    # wrong number. (The per-estimate σ does the heavy lifting here: it
+    # flags noisy systems — e.g. ID01 — even within a "good" chemistry.)
+    base["reliable"] = bool(
+        len(e) >= MIN_RELIABLE_EST
+        and FADE_PLAUSIBLE_PP_YR[0] <= fade <= FADE_PLAUSIBLE_PP_YR[1]
+        and mean_sigma <= SIGMA_MAX_PP
+        and ci95 <= CI95_MAX_PP_YR
+    )
     return base
 
 

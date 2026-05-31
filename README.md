@@ -45,7 +45,7 @@ Method mirrors Figgener et al. (*Nat Energy* 2024) and arXiv 2411.08025.
 src/bess_fleet/
 ├── db.py                       # DuckDB view registrar
 ├── recommendations.py          # operator-facing rule engine
-└── pipeline/                   # 8 idempotent build modules
+└── pipeline/                   # 9 idempotent build modules
     ├── raw_to_1min_parquet.py    bronze: raw zips → 1-min parquet
     ├── clean_temperatures.py     silver: sentinel scrub
     ├── load_identity.py          silver: XLSX → identity.parquet (+ chemistry)
@@ -53,12 +53,14 @@ src/bess_fleet/
     ├── derive_soc.py             silver: chemistry-aware OCV-corrected SoC
     ├── build_daily_kpis.py       gold:   daily aggregates + 4-gate RTE
     ├── detect_threshold_events.py gold:  rule-based events
-    └── degradation_modes.py      gold:   ICA/DVA degradation modes (LLI/LAM)
+    ├── degradation_modes.py      gold:   ICA/DVA degradation modes (LLI/LAM)
+    └── capacity_estimation.py    gold:   Figgener SOHc / ageing rate (eq 1–3)
 
 app/
 ├── Fleet_Overview.py           # severity-first systems table
 ├── pages/1_System.py           # per-rack telemetry deep-dive
 ├── pages/2_Degradation.py      # cross-chemistry degradation modes
+├── pages/3_SOHc.py             # Figgener capacity / SOHc + ageing rate
 └── _components/
     ├── data_access.py           cached DuckDB queries (`get_*`)
     ├── analytics.py             cached compute functions (`compute_*`)

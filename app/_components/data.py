@@ -29,6 +29,8 @@ from .data_access import (
     RETIREMENT_GAP_DAYS,
     SYSTEMS,
     get_active_status,
+    get_capacity_estimates,
+    get_capacity_soh,
     get_daily_availability,
     get_daily_kpis,
     get_daily_soc_spread,
@@ -51,6 +53,7 @@ __all__ = [
     "get_active_status", "get_daily_availability",
     "get_daily_soc_spread", "get_daily_voltage_spread",
     "get_degradation_modes", "get_degradation_summary",
+    "get_capacity_estimates", "get_capacity_soh",
     # analytics
     "compute_system_status",
     "compute_availability",

@@ -101,6 +101,27 @@ def get_degradation_summary() -> pd.DataFrame:
         ).df()
 
 
+@st.cache_data(ttl=3600)
+def get_capacity_estimates() -> pd.DataFrame:
+    """Per-(system, timestamp) SOHc estimates with σ (Figgener method)."""
+    with connect() as con:
+        df = con.sql(
+            "SELECT * FROM capacity_estimates ORDER BY system_id, timestamp"
+        ).df()
+    if "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+    return df
+
+
+@st.cache_data(ttl=3600)
+def get_capacity_soh() -> pd.DataFrame:
+    """Per-system SOHc ageing-rate verdict (rate ± CI, reliability)."""
+    with connect() as con:
+        return con.sql(
+            "SELECT * FROM capacity_soh ORDER BY chemistry, system_id"
+        ).df()
+
+
 # ─── Telemetry — windowed, capped so we bound entries ─────────────────
 @st.cache_data(ttl=3600, max_entries=10, show_spinner="loading telemetry…")
 def get_telemetry(system_id: str, start: datetime, end: datetime) -> pd.DataFrame:

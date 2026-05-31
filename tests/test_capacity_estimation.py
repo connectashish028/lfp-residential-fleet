@@ -106,3 +106,20 @@ class TestAgeingFit:
         })
         out = weighted_ageing_fit(est, "IDxx", "LFP")
         assert np.isnan(out["ageing_pct_per_yr"])
+
+    def test_reliability_gate(self) -> None:
+        """A clean, low-σ series is reliable; a noisy high-σ one is not —
+        even at the same fade. This is the per-system confidence flag."""
+        n = 24
+        months = pd.date_range("2018-01-01", periods=n, freq="MS")
+        soh = 100.0 - 3.0 * (np.arange(n) / 12.0)
+        clean = pd.DataFrame({
+            "timestamp": months, "soh_pct": soh, "sigma_soh_pp": np.full(n, 1.0),
+        })
+        assert weighted_ageing_fit(clean, "X", "NMC")["reliable"] is True
+        noisy = pd.DataFrame({
+            "timestamp": months,
+            "soh_pct": soh + np.tile([18.0, -18.0], n // 2),
+            "sigma_soh_pp": np.full(n, 20.0),
+        })
+        assert weighted_ageing_fit(noisy, "X", "NMC")["reliable"] is False
