@@ -85,7 +85,8 @@ def _months(zip_members: Iterable[str]) -> list[str]:
 # on each rack's own record — no cross-rack alignment needed.
 LFP_E:     frozenset[str] = frozenset({"ID14", "ID16", "ID17", "ID18", "ID19", "ID20"})  # Mfr E · LFP
 LMO_NMC_A: frozenset[str] = frozenset({"ID01", "ID02"})                                  # Mfr A · LMO/NMC blend
-SYSTEM_IDS: frozenset[str] = LFP_E | LMO_NMC_A
+NMC_BC:    frozenset[str] = frozenset({"ID07", "ID11"})                                  # Mfr B/C · pure NMC
+SYSTEM_IDS: frozenset[str] = LFP_E | LMO_NMC_A | NMC_BC
 FREQ = "1min"
 OUT_DIR = DATA_DIR / "lfp_1min"
 

@@ -61,6 +61,7 @@ Run order
     5. python -m bess_fleet.pipeline.derive_soc               # ← this script
     6. python -m bess_fleet.pipeline.build_daily_kpis         # (system × day) curated
     7. python -m bess_fleet.pipeline.detect_threshold_events  # threshold-event audit
+    8. python -m bess_fleet.pipeline.degradation_modes        # ICA/DVA degradation modes
 
 Idempotent — re-run any step to refresh without manual cleanup. This
 script drops any prior ``soc_pct`` / ``is_soc_anchor`` columns before

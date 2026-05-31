@@ -80,32 +80,32 @@ SWEEP_MIN_DSOC  = 0.20    # a sweep must cover ≥20 % SoC to resolve peaks
 SWEEP_GAP_MIN   = 4.0     # a time gap >4 min ends a sweep (missing data)
 SWEEP_MIN_ROWS  = 40      # need enough points to smooth + differentiate
 
-# Fixed cell-voltage anchors per chemistry — capacity is the charge moved
-# between them. Chosen inside the band a typical overnight sweep
-# traverses, so most sweeps yield a comparable measurement. The LFP pair
-# sits in the plateau (large Ah, but voltage-noise-sensitive — that
-# sensitivity is the headline cross-chemistry result, reported as a
-# confidence metric rather than hidden).
-CHEM_ANCHORS: dict[str, tuple[float, float]] = {
-    "LFP": (3.240, 3.300),
-    "NMC": (3.650, 3.950),
-    "LMO": (3.600, 3.900),
-}
-_DEFAULT_ANCHORS = (3.300, 3.700)
+# Capacity anchors are derived *per system* from its own sweep-voltage
+# distribution (the central P20–P80 band that near-full sweeps traverse),
+# not hardcoded per chemistry. Self-calibrating is the only honest way to
+# compare a 3.3 V LFP plateau against a 3.7 V NMC slope, and it removes the
+# magic numbers that made the first pass return NaN on two systems.
+ANCHOR_LO_PCTL = 20.0
+ANCHOR_HI_PCTL = 80.0
 
 # ─── ICA / DVA grid + smoothing ────────────────────────────────────────────
 GRID_POINTS      = 200
-SAVGOL_WINDOW    = 21
-SAVGOL_POLYORDER = 3
-PEAK_PROMINENCE_FRAC = 0.15   # prominence floor as a fraction of curve max
-MAX_PEAKS        = 5
+SAVGOL_WINDOW    = 31      # heavy: field ICA is noisy and the LFP plateau
+SAVGOL_POLYORDER = 3       #   spike sprouts spurious wiggles under-smoothed
+PEAK_PROMINENCE_FRAC = 0.25   # prominence floor as a fraction of curve max
+MAX_PEAKS        = 6
 MAX_ICA_PER_MONTH = 40        # cap the (expensive) ICA work per month
 
-# ─── Mode attribution ──────────────────────────────────────────────────────
+# ─── Mode attribution + confidence ─────────────────────────────────────────
 BASELINE_MONTHS  = 3
 MIN_MONTHS       = 6
 SMOOTH_MONTHS    = 3          # rolling-median window on the capacity trend
 PEAK_V_SHIFT_REF = 0.020      # peak drift beyond this (V) reads as LAM
+# A degradation mode is only published when capacity is actually observable
+# from field sweeps. These gates are the headline cross-chemistry result:
+# NMC/LMO clear them, the flat-plateau LFP systems do not.
+CAP_COV_MAX  = 0.15           # above this, the capacity proxy is too noisy
+FADE_R2_MIN  = 0.30           # below this, there is no real fade trend
 
 
 @dataclass
@@ -268,15 +268,30 @@ def _peak_features(sweep: Sweep) -> dict[str, float] | None:
     }
 
 
+def _adaptive_anchors(sweeps: list[Sweep]) -> tuple[float, float]:
+    """Per-system capacity anchors from the pooled sweep-voltage band.
+
+    Returns the P20/P80 cell voltages across every sweep sample — the band
+    a near-full sweep crosses, derived from the cell's own behaviour rather
+    than a hardcoded chemistry guess.
+    """
+    if not sweeps:
+        return float("nan"), float("nan")
+    allv = np.concatenate([s.cell_v for s in sweeps])
+    return (
+        float(np.percentile(allv, ANCHOR_LO_PCTL)),
+        float(np.percentile(allv, ANCHOR_HI_PCTL)),
+    )
+
+
 def monthly_signatures(
     df: pd.DataFrame,
     capacity_ah: float,
     cells_series: int,
-    chemistry: str = "LFP",
 ) -> pd.DataFrame:
     """Per-(month) ICA signature + anchored capacity for one system."""
     sweeps = reconstruct_sweeps(df, capacity_ah, cells_series)
-    v_lo, v_hi = CHEM_ANCHORS.get(chemistry, _DEFAULT_ANCHORS)
+    v_lo, v_hi = _adaptive_anchors(sweeps)
 
     rows: list[dict[str, Any]] = []
     for sw in sweeps:
@@ -374,24 +389,34 @@ def attribute_modes(monthly: pd.DataFrame) -> pd.DataFrame:
 
 
 def _system_summary(sid: str, chemistry: str, modes: pd.DataFrame) -> dict[str, object]:
-    """One-line health verdict for a system from its monthly mode series."""
+    """One-line verdict — and, crucially, whether capacity was observable.
+
+    The confidence gate is the headline cross-chemistry result: a mode is
+    only declared when the field capacity trend is clean enough to trust.
+    """
     fade, r2 = _robust_fade(modes["month"], modes.get("cap_smooth_ah", modes["anchored_cap_ah"]))
+    cap_cov = float(modes["cap_cov"].median()) if "cap_cov" in modes else float("nan")
+    observable = bool(
+        np.isfinite(cap_cov) and cap_cov <= CAP_COV_MAX
+        and np.isfinite(r2) and r2 >= FADE_R2_MIN
+    )
     valid = modes.dropna(subset=["lli_frac"])
-    if valid.empty:
-        dominant = "insufficient-data"
+    if not observable or valid.empty:
+        dominant = "low-confidence"
     else:
         lli, lam = float(valid["lli_frac"].mean()), float(valid["lam_frac"].mean())
         tag = "LLI" if lli >= lam else "LAM"
         dominant = f"{tag} ({max(lli, lam) * 100:.0f}%)"
-    cap_cov = float(modes["cap_cov"].median()) if "cap_cov" in modes else float("nan")
+    richness = round(float(modes["n_peaks_med"].median()), 1) if len(modes) else float("nan")
     return {
         "system_id": sid,
         "chemistry": chemistry,
         "n_months": int(len(modes)),
-        "peak_richness": round(float(modes["n_peaks_med"].median()), 1) if len(modes) else np.nan,
-        "cap_cov": round(cap_cov, 3),
-        "fade_pct_per_yr": round(fade, 2),
-        "fade_r2": round(r2, 2),
+        "peak_richness": richness,
+        "cap_cov": round(cap_cov, 3) if np.isfinite(cap_cov) else np.nan,
+        "fade_pct_per_yr": round(fade, 2) if np.isfinite(fade) else np.nan,
+        "fade_r2": round(r2, 2) if np.isfinite(r2) else np.nan,
+        "cap_observable": observable,
         "dominant_mode": dominant,
     }
 
@@ -423,7 +448,7 @@ def main() -> None:
         )
         chemistry = str(chem_lookup.get(sid, "?"))
         monthly = monthly_signatures(
-            df, float(cap_lookup[sid]), int(cells_lookup[sid]), chemistry
+            df, float(cap_lookup[sid]), int(cells_lookup[sid])
         )
         modes = attribute_modes(monthly)
         modes.insert(0, "chemistry", chemistry)
@@ -431,11 +456,12 @@ def main() -> None:
         all_modes.append(modes)
         summary = _system_summary(sid, chemistry, modes)
         summaries.append(summary)
+        obs = "OBS" if summary["cap_observable"] else " — "
         print(
             f"  [{sid}] {chemistry:<3} months={summary['n_months']:>3}  "
             f"peaks={summary['peak_richness']!s:>4}  cap-CoV={summary['cap_cov']!s:>5}  "
-            f"fade={summary['fade_pct_per_yr']!s:>5}%/yr(R²={summary['fade_r2']})  "
-            f"mode={summary['dominant_mode']}",
+            f"fade={summary['fade_pct_per_yr']!s:>6}%/yr(R²={summary['fade_r2']!s:>4})  "
+            f"[{obs}] mode={summary['dominant_mode']}",
             flush=True,
         )
 
