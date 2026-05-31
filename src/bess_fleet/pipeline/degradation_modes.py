@@ -388,14 +388,15 @@ def attribute_modes(monthly: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _system_summary(sid: str, chemistry: str, modes: pd.DataFrame) -> dict[str, object]:
+def system_summary(sid: str, chemistry: str, modes: pd.DataFrame) -> dict[str, object]:
     """One-line verdict — and, crucially, whether capacity was observable.
 
     The confidence gate is the headline cross-chemistry result: a mode is
     only declared when the field capacity trend is clean enough to trust.
     """
     fade, r2 = _robust_fade(modes["month"], modes.get("cap_smooth_ah", modes["anchored_cap_ah"]))
-    cap_cov = float(modes["cap_cov"].median()) if "cap_cov" in modes else float("nan")
+    cov_col = modes["cap_cov"] if "cap_cov" in modes else pd.Series(dtype=float)
+    cap_cov = float(cov_col.median()) if cov_col.notna().any() else float("nan")
     observable = bool(
         np.isfinite(cap_cov) and cap_cov <= CAP_COV_MAX
         and np.isfinite(r2) and r2 >= FADE_R2_MIN
@@ -407,7 +408,8 @@ def _system_summary(sid: str, chemistry: str, modes: pd.DataFrame) -> dict[str, 
         lli, lam = float(valid["lli_frac"].mean()), float(valid["lam_frac"].mean())
         tag = "LLI" if lli >= lam else "LAM"
         dominant = f"{tag} ({max(lli, lam) * 100:.0f}%)"
-    richness = round(float(modes["n_peaks_med"].median()), 1) if len(modes) else float("nan")
+    npk = modes["n_peaks_med"] if "n_peaks_med" in modes else pd.Series(dtype=float)
+    richness = round(float(npk.median()), 1) if npk.notna().any() else float("nan")
     return {
         "system_id": sid,
         "chemistry": chemistry,
@@ -454,7 +456,7 @@ def main() -> None:
         modes.insert(0, "chemistry", chemistry)
         modes.insert(0, "system_id", sid)
         all_modes.append(modes)
-        summary = _system_summary(sid, chemistry, modes)
+        summary = system_summary(sid, chemistry, modes)
         summaries.append(summary)
         obs = "OBS" if summary["cap_observable"] else " — "
         print(

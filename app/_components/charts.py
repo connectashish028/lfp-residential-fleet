@@ -764,3 +764,81 @@ def availability_chart(
     return fig
 
 
+# ─── Degradation modes (cross-chemistry) ───────────────────────────────────
+_CHEM_COLOR: dict[str, str] = {
+    "LFP": t.SEV_CRITICAL,   # red
+    "NMC": t.ACTUAL,         # blue
+    "LMO": t.SEV_HEALTHY,    # green
+}
+
+
+def degradation_observability(summary: pd.DataFrame, height: int = 420) -> go.Figure:
+    """Annual fade vs capacity CoV (log), one marker per system.
+
+    Filled = the system clears the observability gate (CoV ≤ 0.15 and
+    fade R² ≥ 0.30); hollow = it does not. Shaded band is the literature
+    2–3 %/yr fade; dashed line is the CoV gate. The headline view.
+    """
+    plot = summary.dropna(subset=["cap_cov", "fade_pct_per_yr"])
+    fig = go.Figure()
+    for chem, grp in plot.groupby("chemistry"):
+        color = _CHEM_COLOR.get(chem, t.TEXT_50)
+        for observable, sub in grp.groupby("cap_observable"):
+            fig.add_trace(go.Scatter(
+                x=sub["fade_pct_per_yr"], y=sub["cap_cov"],
+                mode="markers+text",
+                text=sub["system_id"], textposition="top center",
+                textfont=dict(family="JetBrains Mono, monospace", size=9, color=t.TEXT_50),
+                marker=dict(
+                    size=14, color=color if observable else t.BG,
+                    line=dict(color=color, width=2),
+                ),
+                customdata=sub[["system_id", "chemistry", "fade_r2", "dominant_mode"]],
+                hovertemplate=(
+                    "<b>%{customdata[0]}</b> (%{customdata[1]})<br>"
+                    "fade %{x:.2f} %/yr · CoV %{y:.3f}<br>"
+                    "R²=%{customdata[2]} · %{customdata[3]}<extra></extra>"
+                ),
+                showlegend=False,
+            ))
+    fig.add_hline(
+        y=0.15, line_dash="dash", line_color=t.TEXT_50, line_width=1,
+        annotation_text="observability gate · CoV ≤ 0.15",
+        annotation_position="top left",
+        annotation_font=dict(family="JetBrains Mono, monospace", size=10, color=t.TEXT_50),
+    )
+    fig.add_vrect(
+        x0=2, x1=3, fillcolor=t.SEV_WARNING, opacity=0.10, line_width=0,
+        annotation_text="2–3 %/yr lit.", annotation_position="bottom left",
+        annotation_font=dict(size=9, color=t.SEV_WARNING),
+    )
+    fig.update_layout(**_base_layout(height=height), showlegend=False)
+    fig.update_layout(hovermode="closest")
+    fig.update_yaxes(title_text="capacity CoV  (lower = cleaner)", type="log")
+    fig.update_xaxes(title_text="annual capacity fade [%/yr]  (negative = impossible)")
+    return fig
+
+
+def capacity_fade_trend(modes_sys: pd.DataFrame, height: int = 300) -> go.Figure:
+    """Per-system capacity trend: monthly anchored capacity + smoothed line."""
+    df = modes_sys.sort_values("month")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df["month"], y=df["anchored_cap_ah"], mode="markers",
+        marker=dict(size=5, color=t.TEXT_30),
+        name="monthly",
+        hovertemplate="%{x|%Y-%m}: %{y:.1f} Ah<extra></extra>",
+    ))
+    if "cap_smooth_ah" in df.columns:
+        fig.add_trace(go.Scatter(
+            x=df["month"], y=df["cap_smooth_ah"], mode="lines",
+            line=dict(color=t.ACTUAL, width=2),
+            name="3-mo median",
+            hovertemplate="%{x|%Y-%m}: %{y:.1f} Ah<extra></extra>",
+        ))
+    fig.update_layout(**_base_layout(height=height))
+    fig.update_yaxes(title_text="anchored capacity [Ah]")
+    fig.update_xaxes(title_text="")
+    return fig
+
+

@@ -68,6 +68,23 @@ def get_threshold_events() -> pd.DataFrame:
     return df
 
 
+@st.cache_data(ttl=3600)
+def get_degradation_modes() -> pd.DataFrame:
+    """Per-(system, month) ICA/DVA degradation signatures + capacity trend.
+
+    Spans every chemistry in the lake (LFP / NMC / LMO-NMC), not just the
+    dashboard's default LFP scope — the cross-chemistry contrast is the
+    point of this view.
+    """
+    with connect() as con:
+        df = con.sql(
+            "SELECT * FROM degradation_modes ORDER BY system_id, month"
+        ).df()
+    if "month" in df.columns:
+        df["month"] = pd.to_datetime(df["month"])
+    return df
+
+
 # ─── Telemetry — windowed, capped so we bound entries ─────────────────
 @st.cache_data(ttl=3600, max_entries=10, show_spinner="loading telemetry…")
 def get_telemetry(system_id: str, start: datetime, end: datetime) -> pd.DataFrame:

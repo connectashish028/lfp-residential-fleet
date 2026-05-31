@@ -61,6 +61,7 @@ VIEWS: dict[str, str] = {
     "identity":             "identity.parquet",
     "daily_kpis":           "curated/daily_kpis.parquet",
     "threshold_events":     "curated/threshold_events.parquet",
+    "degradation_modes":    "curated/degradation_modes.parquet",
 }
 
 

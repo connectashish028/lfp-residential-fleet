@@ -37,6 +37,7 @@ AppTest = streamlit_testing.AppTest
 
 DAILY_KPIS = REPO_ROOT / "data" / "curated" / "daily_kpis.parquet"
 THRESHOLD_EVENTS = REPO_ROOT / "data" / "curated" / "threshold_events.parquet"
+DEGRADATION = REPO_ROOT / "data" / "curated" / "degradation_modes.parquet"
 
 DATA_PRESENT = DAILY_KPIS.exists() and THRESHOLD_EVENTS.exists()
 
@@ -45,6 +46,15 @@ needs_data = pytest.mark.skipif(
     reason=(
         "Streamlit integration tests need gold parquets at "
         f"{DAILY_KPIS.parent} — run `python bootstrap_data.py` first."
+    ),
+)
+
+needs_degradation = pytest.mark.skipif(
+    not DEGRADATION.exists(),
+    reason=(
+        "Degradation page test needs "
+        f"{DEGRADATION.name} — run "
+        "`python -m bess_fleet.pipeline.degradation_modes` first."
     ),
 )
 
@@ -157,3 +167,37 @@ class TestSystemPage:
         labels = [str(o) for o in window_box.options]
         assert "Last 30 days" in labels
         assert "Last 1 year" in labels
+
+
+# ─── Degradation page ────────────────────────────────────────────────
+
+
+@needs_degradation
+class TestDegradationPage:
+    """The cross-chemistry degradation page must render, surface the
+    observability framing, and offer a per-system trend selector."""
+
+    PAGE = "app/pages/2_Degradation.py"
+
+    def test_page_runs_without_exception(self) -> None:
+        at = AppTest.from_file(str(REPO_ROOT / self.PAGE), default_timeout=45).run()
+        assert not at.exception, f"Page raised: {at.exception}"
+
+    def test_renders_degradation_heading(self) -> None:
+        at = AppTest.from_file(str(REPO_ROOT / self.PAGE), default_timeout=45).run()
+        rendered = " ".join(m.value for m in at.markdown)
+        assert "Degradation-mode estimation" in rendered
+
+    def test_surfaces_observability_gate(self) -> None:
+        """The observability framing is the headline — must be on the page."""
+        at = AppTest.from_file(str(REPO_ROOT / self.PAGE), default_timeout=45).run()
+        rendered = " ".join(m.value for m in at.markdown).lower()
+        assert "observability" in rendered
+        assert "lli" in rendered and "lam" in rendered
+
+    def test_system_selector_present(self) -> None:
+        at = AppTest.from_file(str(REPO_ROOT / self.PAGE), default_timeout=45).run()
+        assert len(at.selectbox) >= 1
+        options = [str(o) for o in at.selectbox[0].options]
+        # At least one observable NMC-family system should be selectable.
+        assert any("ID02" in o or "ID11" in o for o in options)

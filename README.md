@@ -1,13 +1,41 @@
-# LFP residential fleet — health & analytics dashboard
+# Residential BESS fleet — cross-chemistry health & diagnostics
 
-An operator dashboard for residential battery energy storage, built
-on the [Figgener et al. 2024](https://www.nature.com/articles/s41560-024-01620-9)
-open dataset of six LFP racks instrumented at one-minute cadence from
-2015 through 2022.
+A battery-diagnostics platform for residential energy storage, built on the
+[Figgener et al. 2024](https://www.nature.com/articles/s41560-024-01620-9)
+open dataset — up to **10 systems across three cathode chemistries** (LFP,
+NMC, LMO/NMC), instrumented at one-minute cadence over up to eight years.
+
+It began as a six-rack LFP fleet view and grew a chemistry-aware diagnostic
+layer whose flagship is **degradation-mode estimation**: reconstruct
+quasi-OCV curves from ordinary field operation to read out *which* ageing
+mechanism is at work — and, crucially, *measure whether the field data can
+support that read at all*.
 
 The repo is organised as a proper Python package: a medallion-lakehouse
-pipeline over DuckDB feeds an analytics layer; a Streamlit app sits on
-top and reads only through a single-source-of-truth module.
+pipeline over DuckDB feeds a chemistry-aware analytics layer; a Streamlit app
+reads only through a single-source-of-truth module.
+
+---
+
+## Headline result — capacity observability splits by usage, not just chemistry
+
+![Field-capacity observability by chemistry](docs/degradation_observability.png)
+
+The degradation-mode pipeline reconstructs quasi-OCV sweeps from low-dynamic
+field operation, runs incremental-capacity / differential-voltage analysis
+(ICA/DVA), and attributes capacity loss to **loss-of-lithium-inventory (LLI)**
+vs **loss-of-active-material (LAM)**. A mode is published *only when the
+capacity trend clears a confidence gate* — coefficient of variation ≤ 0.15 and
+fade R² ≥ 0.30.
+
+Across 10 systems every LFP rack **fails** the gate: the flat ~60 mV plateau
+defeats field capacity estimation from partial cycles, and several show
+physically-impossible negative fade. The systems that **pass** are NMC-family
+and land on literature-consistent fade (2.1 / 4.6 %/yr, R²≈0.88) — yet one NMC
+system fails too (noisier, gap-filled data), so observability is *measured per
+system, not assumed from the datasheet chemistry*. The framework's value is
+knowing the difference rather than emitting a confident-looking wrong number.
+Method mirrors Figgener et al. (*Nat Energy* 2024) and arXiv 2411.08025.
 
 ---
 
@@ -17,18 +45,20 @@ top and reads only through a single-source-of-truth module.
 src/bess_fleet/
 ├── db.py                       # DuckDB view registrar
 ├── recommendations.py          # operator-facing rule engine
-└── pipeline/                   # 7 idempotent build modules
+└── pipeline/                   # 8 idempotent build modules
     ├── lfp_to_1min_parquet.py    bronze: raw zips → 1-min parquet
     ├── clean_temperatures.py     silver: sentinel scrub
-    ├── load_identity.py          silver: XLSX → identity.parquet
+    ├── load_identity.py          silver: XLSX → identity.parquet (+ chemistry)
     ├── derive_features.py        silver: ΔT, c_rate, energy_*
-    ├── derive_soc.py             silver: OCV-corrected SoC
+    ├── derive_soc.py             silver: chemistry-aware OCV-corrected SoC
     ├── build_daily_kpis.py       gold:   daily aggregates + 4-gate RTE
-    └── detect_threshold_events.py gold:  rule-based events
+    ├── detect_threshold_events.py gold:  rule-based events
+    └── degradation_modes.py      gold:   ICA/DVA degradation modes (LLI/LAM)
 
 app/
 ├── Fleet_Overview.py           # severity-first systems table
 ├── pages/1_System.py           # per-rack telemetry deep-dive
+├── pages/2_Degradation.py      # cross-chemistry degradation modes
 └── _components/
     ├── data_access.py           cached DuckDB queries (`get_*`)
     ├── analytics.py             cached compute functions (`compute_*`)
