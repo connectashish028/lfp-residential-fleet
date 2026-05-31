@@ -104,6 +104,17 @@ class TestFleetOverviewPage:
         # The page renders "Watch" status and/or "Action Recommended" pill
         assert ("watch" in rendered) or ("action recommended" in rendered)
 
+    def test_status_grid_spans_all_chemistries(self) -> None:
+        """With the scope widened to the full cross-chemistry fleet, the
+        grid must surface NMC and LMO systems alongside the LFP racks."""
+        at = AppTest.from_file(
+            str(REPO_ROOT / "app" / "Fleet_Overview.py"),
+            default_timeout=30,
+        ).run()
+        rendered = " ".join(m.value for m in at.markdown)
+        assert "ID07" in rendered   # pure NMC (Mfr B)
+        assert "ID01" in rendered   # LMO/NMC (Mfr A)
+
 
 # ─── System deep-dive page ───────────────────────────────────────────
 
@@ -167,6 +178,16 @@ class TestSystemPage:
         labels = [str(o) for o in window_box.options]
         assert "Last 30 days" in labels
         assert "Last 1 year" in labels
+
+    def test_renders_nmc_system_without_exception(self) -> None:
+        """A NMC system (approximate SoC, different OCV + threshold limits)
+        must render through the System page without raising — the cross-
+        chemistry guarantee on this page."""
+        at = AppTest.from_file(str(REPO_ROOT / self.PAGE), default_timeout=60).run()
+        options = [str(o) for o in at.selectbox[0].options]
+        assert any("ID07" in o for o in options)
+        at.selectbox[0].set_value("ID07").run()
+        assert not at.exception, f"NMC render raised: {at.exception}"
 
 
 # ─── Degradation page ────────────────────────────────────────────────

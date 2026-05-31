@@ -20,12 +20,15 @@ import streamlit as st
 
 from bess_fleet.db import connect
 
-# Visible systems for today's demo — scoped down to ID16 + ID17 to
-# keep the System page narrative tight. The full fleet
-# (ID14, ID16, ID17, ID18, ID19, ID20) is in the parquets; expanding
-# this list re-enables the others on the dashboard without any other
-# code change.
-SYSTEMS: list[str] = ["ID16", "ID17"]
+# Visible systems on the Overview + System pages. The full cross-chemistry
+# fleet now flows all the way through the silver→gold pipeline, so every
+# system is selectable: LFP (Mfr E), pure NMC (Mfr B/C) and LMO/NMC
+# (Mfr A). Order groups by chemistry then ID for a readable selector.
+SYSTEMS: list[str] = [
+    "ID14", "ID16", "ID17", "ID18", "ID19", "ID20",   # LFP · Mfr E
+    "ID07", "ID11",                                    # NMC · Mfr B/C
+    "ID01", "ID02",                                    # LMO/NMC · Mfr A
+]
 
 # A system is "retired" when its last telemetry sample is older than
 # the fleet's most-recent sample by more than this gap. Set high enough

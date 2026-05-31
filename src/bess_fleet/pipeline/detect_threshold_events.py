@@ -44,6 +44,11 @@ OUT_PATH = DATA_DIR / "curated" / "threshold_events.parquet"
 PACK_8KWH: frozenset[str] = frozenset({"ID14", "ID16", "ID17", "ID18"})
 PACK_9KWH: frozenset[str] = frozenset({"ID19", "ID20"})
 
+# A C-rate above (inverter rated C-rate × this margin) is "above inverter".
+# inverter rated C-rate = inverter_kw / capacity_kwh = I/Q (since P=VI,
+# E=VQ), so it's directly comparable to the measured c_rate channel.
+C_RATE_MARGIN = 1.4
+
 # ─── RULES — audited against fleet stats ───────────────────────────────────
 # Each rule: (rule_id, severity, channel, condition_fn, min_duration_min, system_filter)
 RULES: list[tuple[str, str, str, Callable[[pd.Series], pd.Series], int, frozenset[str] | None]] = [
@@ -67,15 +72,19 @@ RULES: list[tuple[str, str, str, Callable[[pd.Series], pd.Series], int, frozense
         lambda s: s.abs() > 15,                       15,  PACK_9KWH),
 
     # ─ Electrical ───────────────────────────────────────────────────────
-    # c_rate > 0.6 — above the inverter's physical ceiling (~0.43 C);
-    # fires only on real sensor glitches / unusual events.
-    ("c_rate_above_inverter", "warning",  "c_rate",
-        lambda s: s > 0.6,                             1,  None),
-    # c_rate > 1.0 — physically impossible; clear measurement error
+    # c_rate > 1.0 — physically impossible on any of these packs; a clear
+    # measurement error. The softer "above the inverter's rated C-rate"
+    # check is inverter-relative and lives in main() (see C_RATE_MARGIN):
+    # a fixed 0.6 ceiling is right for an 8 kWh / 3.3 kW LFP rack (~0.41 C)
+    # but fires on every normal sample of a 2.2 kWh / 2.0 kW unit (~0.91 C).
     ("c_rate_impossible",     "critical", "c_rate",
         lambda s: s > 1.0,                             1,  None),
-    # Cell-voltage rules — derived as voltage_v / cells_series
-    # > 3.65 V: BMS failing to enforce upper cutoff
+    # Cell-voltage rules — derived as voltage_v / cells_series. These are
+    # chemistry-specific (see _RULE_CHEMISTRIES): a 3.65 V "overcharge"
+    # limit is correct for LFP but would fire on every normal NMC sample
+    # (~4.2 V full charge). main() gates each rule to its chemistry.
+    #
+    # ── LFP (full charge ~3.65 V) ────────────────────────────────────────
     ("cell_v_overcharge",     "critical", "cell_voltage_v",
         lambda s: s > 3.65,                            1,  None),
     # Two-tier undervolt — separates "BMS working hard at cutoff" from
@@ -89,12 +98,35 @@ RULES: list[tuple[str, str, str, Callable[[pd.Series], pd.Series], int, frozense
         lambda s: (s > 0.5) & (s < 2.5),               5,  None),
     ("cell_v_deep_undervolt", "critical", "cell_voltage_v",
         lambda s: (s > 0.5) & (s < 2.0),               5,  None),
+    # ── NMC / LMO-NMC (full charge ~4.2 V) ───────────────────────────────
+    # Conservative limits — clearly-abnormal only, so they stay dormant on
+    # healthy cells rather than risk a false-positive flood pending a
+    # proper per-cell audit.
+    ("nmc_cell_v_overcharge", "critical", "cell_voltage_v",
+        lambda s: s > 4.25,                            1,  None),
+    ("nmc_cell_v_undervolt",  "warning",  "cell_voltage_v",
+        lambda s: (s > 0.5) & (s < 2.5),               5,  None),
+    ("nmc_cell_v_deep",       "critical", "cell_voltage_v",
+        lambda s: (s > 0.5) & (s < 2.0),               5,  None),
 
     # ─ Operational ──────────────────────────────────────────────────────
-    # System dark: cell_v < 0.5 for ≥30 min → system off / comms outage
+    # System dark: cell_v < 0.5 for ≥30 min → system off / comms outage.
+    # Chemistry-agnostic (0.5 V/cell means "off" on any chemistry).
     ("system_dark",           "warning",  "cell_voltage_v",
         lambda s: s < 0.5,                            30,  None),
 ]
+
+# Cell-voltage rules are calibrated per chemistry; every other rule
+# (thermal, c-rate, system_dark) is physical and applies to all. A rule
+# absent from this map runs on every chemistry.
+_RULE_CHEMISTRIES: dict[str, frozenset[str]] = {
+    "cell_v_overcharge":      frozenset({"LFP"}),
+    "cell_v_low":             frozenset({"LFP"}),
+    "cell_v_deep_undervolt":  frozenset({"LFP"}),
+    "nmc_cell_v_overcharge":  frozenset({"NMC", "LMO"}),
+    "nmc_cell_v_undervolt":   frozenset({"NMC", "LMO"}),
+    "nmc_cell_v_deep":        frozenset({"NMC", "LMO"}),
+}
 
 
 def collapse_to_events(
@@ -131,10 +163,18 @@ def main() -> None:
     # Pull identity once for cell-count lookup (used in cell_voltage derivation)
     with connect() as con:
         identity = con.sql(
-            "SELECT system_id, cells_series FROM identity ORDER BY system_id"
+            "SELECT system_id, cells_series, chemistry, "
+            "inverter_power_kw, capacity_kwh FROM identity ORDER BY system_id"
         ).df()
     systems = identity["system_id"].tolist()
     cells_lookup = dict(zip(identity["system_id"], identity["cells_series"], strict=True))
+    chem_lookup = dict(zip(identity["system_id"], identity["chemistry"], strict=True))
+    # Inverter rated C-rate per system = inverter_kw / capacity_kwh.
+    ceiling_lookup = {
+        r["system_id"]: float(r["inverter_power_kw"]) / float(r["capacity_kwh"])
+        for _, r in identity.iterrows()
+        if r["capacity_kwh"]
+    }
 
     all_events: list[pd.DataFrame] = []
     for sid in systems:
@@ -151,9 +191,13 @@ def main() -> None:
         # Derive cell voltage from pack voltage + cell series count
         one["cell_voltage_v"] = one["voltage_v"] / cells_lookup[sid]
 
+        chem = str(chem_lookup.get(sid, "LFP"))
         sys_event_frames: list[pd.DataFrame] = []
         for rule_id, severity, channel, condition_fn, min_dur, sys_filter in RULES:
             if sys_filter is not None and sid not in sys_filter:
+                continue
+            allowed_chem = _RULE_CHEMISTRIES.get(rule_id)
+            if allowed_chem is not None and chem not in allowed_chem:
                 continue
             if channel not in one.columns:
                 continue
@@ -166,6 +210,20 @@ def main() -> None:
             ev["channel"] = channel
             ev["system_id"] = sid
             sys_event_frames.append(ev)
+
+        # Inverter-relative C-rate ceiling — a fraction-of-nameplate rule,
+        # so it reads the same on a 2 kWh residential unit and a 1 MWh
+        # system instead of misfiring on small high-C packs.
+        ceiling = ceiling_lookup.get(sid)
+        if ceiling is not None and "c_rate" in one.columns:
+            flag = one["c_rate"] > ceiling * C_RATE_MARGIN
+            ev = collapse_to_events(flag, one["c_rate"], min_duration_min=1)
+            if not ev.empty:
+                ev["rule_id"] = "c_rate_above_inverter"
+                ev["severity"] = "warning"
+                ev["channel"] = "c_rate"
+                ev["system_id"] = sid
+                sys_event_frames.append(ev)
 
         if sys_event_frames:
             n = sum(len(e) for e in sys_event_frames)

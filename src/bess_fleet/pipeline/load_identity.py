@@ -18,6 +18,7 @@ Columns written:
 * ``voltage_nominal_v`` — pack nominal voltage
 * ``cells_series``      — number of cells in series
 * ``cells_parallel``    — number of cells in parallel
+* ``inverter_power_kw`` — nominal inverter power (sets the C-rate ceiling)
 * ``install_date``      — when the system was commissioned
 
 Run with::
@@ -62,7 +63,7 @@ def main() -> None:
         "system_id", "Manufacturer", "Chemistry", "Chemistry_detail",
         "Energy_nominal_in_kWh", "Capacity_nominal_in_Ah",
         "Voltage_nominal_in_V", "Cell_number_in_series",
-        "Cell_number_in_parallel", "install_date",
+        "Cell_number_in_parallel", "Inverter_nominal_power", "install_date",
     ]
     rename = {
         "Manufacturer":            "manufacturer",
@@ -73,6 +74,7 @@ def main() -> None:
         "Voltage_nominal_in_V":    "voltage_nominal_v",
         "Cell_number_in_series":   "cells_series",
         "Cell_number_in_parallel": "cells_parallel",
+        "Inverter_nominal_power":  "inverter_power_kw",
     }
     identity = (
         meta[meta["system_id"].isin(SYSTEM_IDS)][keep_cols]

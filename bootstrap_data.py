@@ -35,11 +35,17 @@ Run with::
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 RAW_DIR = Path("data/raw/figgener_meta")
+
+# Force UTF-8 in the child processes. The pipeline modules print Unicode
+# (→, Δ, μ, °C); on a legacy Windows console (cp1252) an un-forced child
+# raises UnicodeEncodeError mid-run. Linux/CI default to UTF-8 already.
+_UTF8_ENV = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
 
 PIPELINE_MODULES = [
     "bess_fleet.pipeline.lfp_to_1min_parquet",
@@ -72,7 +78,7 @@ def main() -> None:
 
     for i, module in enumerate(PIPELINE_MODULES, start=1):
         print(f"━━━ Step {i}/{len(PIPELINE_MODULES)}: {module} ━━━")
-        result = subprocess.run([sys.executable, "-m", module])
+        result = subprocess.run([sys.executable, "-m", module], env=_UTF8_ENV)
         if result.returncode != 0:
             print(f"\n✖  Step {i} failed (exit code {result.returncode}).")
             sys.exit(result.returncode)
