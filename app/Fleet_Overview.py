@@ -57,13 +57,19 @@ st.markdown(
 )
 
 
+# Subtitle reflects the *displayed* systems, not the whole identity table
+# (the lake now carries NMC/LMO systems too — counting all of identity here
+# would mis-report the Overview's scope).
+_shown = identity[identity["system_id"].isin(data.SYSTEMS)]
+_mfr_n = int(_shown["manufacturer"].nunique())
+_chems = " / ".join(sorted(_shown["chemistry"].unique())) or "—"
 st.markdown(
     "<h1>Fleet Overview</h1>"
     f'<p style="color:rgba(0,0,0,0.55); font-family:\'JetBrains Mono\',monospace;'
     f"font-size:0.78rem; letter-spacing:0.1em; text-transform:uppercase;"
     f'margin-top:0.25rem;">'
-    f"{len(data.SYSTEMS)} systems · {len(identity['manufacturer'].unique())} manufacturer · "
-    f"LFP chemistry"
+    f"{len(data.SYSTEMS)} systems · {_mfr_n} manufacturer · "
+    f"{_chems} chemistry"
     "</p>",
     unsafe_allow_html=True,
 )

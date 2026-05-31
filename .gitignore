@@ -18,9 +18,10 @@ dist/
 # publicly available; see the bootstrap script for citation + URL.
 data/
 
-# IDE
+# IDE / tooling
 .vscode/
 .idea/
+.claude/
 *.swp
 .DS_Store
 
