@@ -29,6 +29,7 @@ Run with::
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 
 import numpy as np
@@ -39,15 +40,24 @@ from bess_fleet.io import safe_to_parquet
 
 OUT_PATH = DATA_DIR / "curated" / "threshold_events.parquet"
 
-# Hardware groups — different capacity → different thermal profile,
-# stratified ΔT thresholds reflect this.
-PACK_8KWH: frozenset[str] = frozenset({"ID14", "ID16", "ID17", "ID18"})
-PACK_9KWH: frozenset[str] = frozenset({"ID19", "ID20"})
+# Hardware groups — different capacity / chemistry → different thermal
+# profile, so the ΔT anomaly thresholds are stratified per group. NMC and
+# LMO run hotter than LFP (measured: NMC ΔT̄ ≈ 5 °C vs LFP ≈ 1 °C), so they
+# get correspondingly higher ceilings. The NMC/LMO values are conservative
+# (catch genuine excursions, not normal operation) pending a per-group audit.
+PACK_8KWH: frozenset[str] = frozenset({"ID14", "ID16", "ID17", "ID18"})  # LFP
+PACK_9KWH: frozenset[str] = frozenset({"ID19", "ID20"})                  # LFP
+PACK_NMC:  frozenset[str] = frozenset({"ID07", "ID11"})                  # pure NMC
+PACK_LMO:  frozenset[str] = frozenset({"ID01", "ID02"})                  # LMO/NMC
 
 # A C-rate above (inverter rated C-rate × this margin) is "above inverter".
 # inverter rated C-rate = inverter_kw / capacity_kwh = I/Q (since P=VI,
-# E=VQ), so it's directly comparable to the measured c_rate channel.
+# E=VQ), so it's directly comparable to the measured c_rate channel. The
+# threshold is also capped just under the c_rate_impossible line (1.0) so
+# the warning tier stays meaningful even on small packs whose inverter
+# ceiling is itself near 1 C.
 C_RATE_MARGIN = 1.4
+C_RATE_ABOVE_INVERTER_CAP = 0.95
 
 # ─── RULES — audited against fleet stats ───────────────────────────────────
 # Each rule: (rule_id, severity, channel, condition_fn, min_duration_min, system_filter)
@@ -65,11 +75,16 @@ RULES: list[tuple[str, str, str, Callable[[pd.Series], pd.Series], int, frozense
     # T_bat < 0 — cold-charge risk (lithium plating in LFP)
     ("t_bat_cold",         "warning",  "temperature_c",
         lambda s: s < 0,                              15,  None),
-    # ΔT — capacity-stratified: 9 kWh runs hotter by design
+    # ΔT — stratified by hardware group; hotter chemistries get higher
+    # ceilings so a normal warm NMC pack isn't flagged as anomalous.
     ("delta_t_high_8kwh",  "warning",  "thermal_delta_c",
         lambda s: s.abs() > 10,                       15,  PACK_8KWH),
     ("delta_t_high_9kwh",  "warning",  "thermal_delta_c",
         lambda s: s.abs() > 15,                       15,  PACK_9KWH),
+    ("delta_t_high_nmc",   "warning",  "thermal_delta_c",
+        lambda s: s.abs() > 20,                       15,  PACK_NMC),
+    ("delta_t_high_lmo",   "warning",  "thermal_delta_c",
+        lambda s: s.abs() > 15,                       15,  PACK_LMO),
 
     # ─ Electrical ───────────────────────────────────────────────────────
     # c_rate > 1.0 — physically impossible on any of these packs; a clear
@@ -129,6 +144,36 @@ _RULE_CHEMISTRIES: dict[str, frozenset[str]] = {
 }
 
 
+def rule_applies_to_chemistry(rule_id: str, chemistry: str) -> bool:
+    """Whether a rule fires for a given chemistry.
+
+    Rules in :data:`_RULE_CHEMISTRIES` are chemistry-calibrated (cell-
+    voltage limits); everything else is physical and applies everywhere.
+    """
+    allowed = _RULE_CHEMISTRIES.get(rule_id)
+    return allowed is None or chemistry in allowed
+
+
+def inverter_ceiling_crate(inverter_kw: float, capacity_kwh: float) -> float:
+    """Inverter's rated C-rate = power / energy = I/Q.
+
+    Returns ``nan`` for a non-positive capacity so callers can skip it.
+    """
+    if not capacity_kwh or capacity_kwh <= 0:
+        return float("nan")
+    return inverter_kw / capacity_kwh
+
+
+def above_inverter_threshold(inverter_kw: float, capacity_kwh: float) -> float:
+    """C-rate threshold for the 'above inverter' warning — the rated
+    ceiling × margin, capped just under the impossible (1.0 C) line so the
+    warning tier stays meaningful on small high-C packs."""
+    ceiling = inverter_ceiling_crate(inverter_kw, capacity_kwh)
+    if math.isnan(ceiling):
+        return float("nan")
+    return min(ceiling * C_RATE_MARGIN, C_RATE_ABOVE_INVERTER_CAP)
+
+
 def collapse_to_events(
     flag_series: pd.Series,
     value_series: pd.Series,
@@ -169,11 +214,12 @@ def main() -> None:
     systems = identity["system_id"].tolist()
     cells_lookup = dict(zip(identity["system_id"], identity["cells_series"], strict=True))
     chem_lookup = dict(zip(identity["system_id"], identity["chemistry"], strict=True))
-    # Inverter rated C-rate per system = inverter_kw / capacity_kwh.
-    ceiling_lookup = {
-        r["system_id"]: float(r["inverter_power_kw"]) / float(r["capacity_kwh"])
+    # Per-system 'above inverter' C-rate threshold (capped under 1.0 C).
+    thr_lookup = {
+        r["system_id"]: above_inverter_threshold(
+            float(r["inverter_power_kw"]), float(r["capacity_kwh"])
+        )
         for _, r in identity.iterrows()
-        if r["capacity_kwh"]
     }
 
     all_events: list[pd.DataFrame] = []
@@ -196,8 +242,7 @@ def main() -> None:
         for rule_id, severity, channel, condition_fn, min_dur, sys_filter in RULES:
             if sys_filter is not None and sid not in sys_filter:
                 continue
-            allowed_chem = _RULE_CHEMISTRIES.get(rule_id)
-            if allowed_chem is not None and chem not in allowed_chem:
+            if not rule_applies_to_chemistry(rule_id, chem):
                 continue
             if channel not in one.columns:
                 continue
@@ -214,9 +259,9 @@ def main() -> None:
         # Inverter-relative C-rate ceiling — a fraction-of-nameplate rule,
         # so it reads the same on a 2 kWh residential unit and a 1 MWh
         # system instead of misfiring on small high-C packs.
-        ceiling = ceiling_lookup.get(sid)
-        if ceiling is not None and "c_rate" in one.columns:
-            flag = one["c_rate"] > ceiling * C_RATE_MARGIN
+        thr = thr_lookup.get(sid)
+        if thr is not None and not math.isnan(thr) and "c_rate" in one.columns:
+            flag = one["c_rate"] > thr
             ev = collapse_to_events(flag, one["c_rate"], min_duration_min=1)
             if not ev.empty:
                 ev["rule_id"] = "c_rate_above_inverter"

@@ -11,7 +11,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bess_fleet.pipeline.detect_threshold_events import collapse_to_events
+from bess_fleet.pipeline.detect_threshold_events import (
+    above_inverter_threshold,
+    collapse_to_events,
+    inverter_ceiling_crate,
+    rule_applies_to_chemistry,
+)
 
 
 def _flag_series(pattern: list[int], start: str = "2025-01-01 00:00") -> pd.Series:
@@ -123,3 +128,54 @@ class TestNanHandling:
         # NaN-as-False → three separate single-minute events
         # (but if min_duration_min defaults to 1, they all survive)
         assert len(result) == 3
+
+
+class TestChemistryGating:
+    """The cross-chemistry safety guarantee: an LFP voltage limit must
+    never fire on an NMC cell, and vice-versa."""
+
+    def test_lfp_voltage_rule_only_on_lfp(self) -> None:
+        assert rule_applies_to_chemistry("cell_v_overcharge", "LFP")
+        assert not rule_applies_to_chemistry("cell_v_overcharge", "NMC")
+        assert not rule_applies_to_chemistry("cell_v_overcharge", "LMO")
+
+    def test_nmc_voltage_rule_only_on_nmc_family(self) -> None:
+        assert rule_applies_to_chemistry("nmc_cell_v_overcharge", "NMC")
+        assert rule_applies_to_chemistry("nmc_cell_v_overcharge", "LMO")
+        assert not rule_applies_to_chemistry("nmc_cell_v_overcharge", "LFP")
+
+    def test_physical_rules_apply_to_every_chemistry(self) -> None:
+        """Thermal / c-rate / system_dark rules are not in the chemistry
+        map, so they run everywhere."""
+        for chem in ("LFP", "NMC", "LMO"):
+            assert rule_applies_to_chemistry("t_bat_warm", chem)
+            assert rule_applies_to_chemistry("system_dark", chem)
+
+
+class TestInverterCeiling:
+    """The C-rate ceiling must be inverter-relative so it reads the same
+    on a 2 kWh residential unit and a 1 MWh system."""
+
+    def test_ceiling_is_power_over_energy(self) -> None:
+        # 3.3 kW inverter on an 8.09 kWh LFP pack ≈ 0.41 C.
+        assert inverter_ceiling_crate(3.3, 8.09) == pytest.approx(0.408, abs=0.01)
+        # 2.0 kW on a 2.2 kWh LMO unit ≈ 0.91 C — far above the LFP ceiling.
+        assert inverter_ceiling_crate(2.0, 2.2) == pytest.approx(0.909, abs=0.01)
+
+    def test_small_pack_threshold_capped_below_impossible(self) -> None:
+        """A 0.91 C ceiling × 1.4 margin = 1.27 would exceed the
+        impossible (1.0 C) line; the threshold must cap below it so the
+        warning tier stays meaningful."""
+        thr = above_inverter_threshold(2.0, 2.2)
+        assert thr < 1.0
+        assert thr == pytest.approx(0.95)
+
+    def test_lfp_threshold_reproduces_legacy_ceiling(self) -> None:
+        """The old fixed rule was c_rate > 0.6 for the LFP packs; the
+        inverter-relative threshold should land near it, not far off."""
+        thr = above_inverter_threshold(3.3, 8.09)
+        assert 0.5 < thr < 0.65
+
+    def test_zero_capacity_returns_nan(self) -> None:
+        import math
+        assert math.isnan(inverter_ceiling_crate(3.0, 0.0))
